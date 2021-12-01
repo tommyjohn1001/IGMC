@@ -175,7 +175,7 @@ parser.add_argument(
     "--epochs", type=int, default=80, metavar="N", help="number of epochs to train"
 )
 parser.add_argument(
-    "--batch-size", type=int, default=50, metavar="N", help="batch size during training"
+    "--batch-size", type=int, default=128, metavar="N", help="batch size during training"
 )
 parser.add_argument("--test-freq", type=int, default=1, metavar="N", help="test every n epochs")
 parser.add_argument(

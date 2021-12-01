@@ -241,9 +241,13 @@ class IGMC(GNN):
         self.max_neighbor = 50
         self.naive_walking_lin1 = nn.Linear(128, self.max_neighbor)
         self.naive_walking_lin2 = nn.Linear(128, 1)
-        self.edge_embd = nn.Linear(1, 128)
-        self.lin_embd = nn.Sequential(nn.Linear(256, 256), nn.Tanh())
-        self.lin_embd2 = nn.Linear(256, 128, bias=False)
+        # self.edge_embd = nn.Linear(1, 128)
+        # self.lin_embd = nn.Sequential(nn.Linear(256, 256), nn.Tanh())
+        # self.lin_embd2 = nn.Linear(256, 128, bias=False)
+
+        ## Apply new embedding and LSTMCell instead of simple Linear
+        self.edge_embd = nn.Embedding(num_relations, 128)
+        self.lin_embd = nn.LSTMCell(256, 128)
 
     def naive_reasoning_walking(self, x, edge_index, edge_type, max_walks, start_node, end_node):
         # x: [n_nodes, 128]
@@ -258,6 +262,7 @@ class IGMC(GNN):
         traversed_node = set([node.item()])
         accumulated = x[node]
         is_reaching_target = False
+        h, c = 0, 0
         while not is_reaching_target and n_walks < max_walks:
             # print(f"==> node: {node}")
             edge_type_ = edge_type[edge_index[0] == node]
@@ -291,17 +296,19 @@ class IGMC(GNN):
             selected_neighbor = torch.argmax(torch.softmax(selection_dist, -1), -1)
             # [1]
             selected_node = neighbors[selected_neighbor]
-            selected_node_embd = x[selected_node]
+            selected_node_embd = x[selected_node].unsqueeze(0)
             selected_edge_type = edge_type_[selected_neighbor]
-            selected_edge_embd = self.edge_embd(selected_edge_type.unsqueeze(0) * 1.0)
+            selected_edge_embd = self.edge_embd(selected_edge_type.unsqueeze(0))
 
             ## dùng cơ chế cộng để accumulate hoặc áp dụng memorynet
             total = torch.cat((selected_node_embd, selected_edge_embd), -1)
             # [b, 256]
-            total = self.lin_embd(total)
-            total = F.dropout(total, p=0.2, training=self.training)
-            total = self.lin_embd2(total)
-            accumulated += total
+            if not torch.is_tensor(h):
+                h, c = self.lin_embd(total)
+            else:
+                h, c = self.lin_embd(total, (h, c))
+            # [bsz, 128]
+            accumulated += h.squeeze(0)
 
             if selected_node == end_node:
                 is_reaching_target = True

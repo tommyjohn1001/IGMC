@@ -254,7 +254,7 @@ def load_data(fname, seed=1234, verbose=True):
 
         movies_headers = ['movie_id', 'title', 'genre']
         movies_df = pd.read_csv(movies_file, sep=sep, header=None,
-                                names=movies_headers, engine='python')
+                                names=movies_headers, engine='python', encoding = "ISO-8859-1")
 
         # Extracting all genres
         genres = []

@@ -266,7 +266,7 @@ class IGMC(GNN):
         while not is_reaching_target and n_walks < max_walks:
             # print(f"==> node: {node}")
             edge_type_ = edge_type[edge_index[0] == node]
-            neighbors, _ = torch.sort(edge_index[1][edge_index[0] == node], -1)
+            neighbors = edge_index[1][edge_index[0] == node]
 
             if len(neighbors) == 0:
                 accumulated += x[end_node]

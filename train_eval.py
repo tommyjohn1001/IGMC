@@ -12,8 +12,8 @@ import torch.nn.functional as F
 from sklearn.model_selection import StratifiedKFold
 from torch import tensor
 from torch.optim import Adam
-from torch_geometric.data import DataLoader
-from torch_geometric.data import DenseDataLoader as DenseLoader
+from torch_geometric.loader import DataLoader
+from torch_geometric.loader import DenseDataLoader as DenseLoader
 from tqdm import tqdm
 
 matplotlib.use("Agg")

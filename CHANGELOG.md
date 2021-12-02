@@ -3,3 +3,8 @@
 - Add config for each dataset as YAML file
 - Add linear learning rate scheduler
 - Add 2 arguments: max_neighbors and max_walks
+
+## Dec 3, 00:06
+
+- Add some arguments
+- Fix log

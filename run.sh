@@ -14,13 +14,13 @@
 ## 2. Train
 
 ## Train with dataset Flixster
-# CUDA_VISIBLE_DEVICES=1 python Main.py --data-name flixster > logs/Dec1_flixster.log
+# CUDA_VISIBLE_DEVICES=1 python Main.py --data-name flixster --exp_name nrw0.2
 
-# CUDA_VISIBLE_DEVICES=1 python Main.py --data-name douban > logs/Dec1_douban.log
+# CUDA_VISIBLE_DEVICES=1 python Main.py --data-name douban --exp_name nrw0.2
 
-# CUDA_VISIBLE_DEVICES=1 python Main.py --data-name yahoo_music > logs/Dec1_yahoo.log
+# CUDA_VISIBLE_DEVICES=1 python Main.py --data-name yahoo_music --exp_name nrw0.2
 
 ## Train with dataset MovieLens-100k
-# CUDA_VISIBLE_DEVICES=1 python Main.py --data-name ml_100k > logs/Dec1_movie_100k.log
+# CUDA_VISIBLE_DEVICES=1 python Main.py --data-name ml_100k --exp_name nrw0.2
 
-# CUDA_VISIBLE_DEVICES=1 python Main.py --data-name ml_1m  > logs/Dec1_movie_1M.log
+# CUDA_VISIBLE_DEVICES=1 python Main.py --data-name ml_1m  --exp_name nrw0.2

@@ -26,11 +26,11 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def get_linear_schedule_with_warmup(
-    optimizer, num_warmup_steps, num_training_steps, last_epoch=-1
+    optimizer, num_warmup_steps, num_training_steps, init_lr=5e-4, last_epoch=-1
 ):
     def lr_lambda(current_step: int):
         if current_step < num_warmup_steps:
-            return float(current_step) / float(max(1, num_warmup_steps)) + 5e-4
+            return float(current_step) / float(max(1, num_warmup_steps)) + init_lr
         return max(
             0.0,
             float(num_training_steps - current_step)
@@ -55,6 +55,8 @@ def train_multiple_epochs(
     logger=None,
     continue_from=None,
     res_dir=None,
+    percent_warmup=0.15,
+    init_lr=5e-4,
 ):
 
     rmses = []
@@ -72,7 +74,10 @@ def train_multiple_epochs(
 
     model.to(device).reset_parameters()
     optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
-    lr_scheduler = get_linear_schedule_with_warmup(optimizer, 200, 4500)
+    n_training_steps = int(epochs * len(train_dataset) / batch_size)
+    lr_scheduler = get_linear_schedule_with_warmup(
+        optimizer, n_training_steps * percent_warmup, n_training_steps, init_lr
+    )
 
     start_epoch = 1
     if continue_from is not None:

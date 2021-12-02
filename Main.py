@@ -2,12 +2,12 @@ import argparse
 import copy
 import math
 import os.path
-import pdb
 import random
 import sys
 import time
 import traceback
 import warnings
+from datetime import datetime, timedelta
 from shutil import copy, copytree, rmtree
 
 import numpy as np
@@ -132,6 +132,9 @@ parser.add_argument(
     default=1.0,
     help="if < 1, subsample nodes per hop according to the ratio",
 )
+
+parser.add_argument("--percent_warmup", type=float, default=0.15)
+parser.add_argument("--init_lr", type=float, default=5e-4)
 parser.add_argument(
     "--max-nodes-per-hop",
     default=10000,
@@ -223,6 +226,7 @@ parser.add_argument(
     default=False,
     help="if True, maps all ratings to standard 1, 2, 3, 4, 5 before training",
 )
+parser.add_argument("--exp_name", type=str)
 # sparsity experiment settings
 parser.add_argument(
     "--ratio",
@@ -259,7 +263,7 @@ if not args.data_name in config_dataset.keys():
 
 config_dataset = config_dataset[args.data_name]
 for k, v in config_dataset.items():
-    if k == "lr":
+    if "lr" in k:
         setattr(args, k, float(v))
     else:
         setattr(args, k, v)
@@ -304,8 +308,12 @@ if args.testing:
     val_test_appendix = "testmode"
 else:
     val_test_appendix = "valmode"
+
+
+now = datetime.now() + timedelta(hours=7)
 args.res_dir = os.path.join(
-    args.file_dir, "results/{}{}_{}".format(args.data_name, args.save_appendix, val_test_appendix)
+    args.file_dir,
+    f"results/{args.exp_name}/{args.data_name}{args.save_appendix}_{val_test_appendix}/{now.strftime('%b%d_%H-%M')}",
 )
 if args.transfer == "":
     args.model_pos = os.path.join(args.res_dir, "model_checkpoint{}.pth".format(args.epochs))
@@ -586,6 +594,8 @@ if not args.no_train:
         logger=logger,
         continue_from=args.continue_from,
         res_dir=args.res_dir,
+        percent_warmup=args.percent_warmup,
+        init_lr=args.init_lr,
     )
 
 if args.visualize:

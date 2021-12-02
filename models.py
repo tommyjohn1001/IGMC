@@ -311,7 +311,7 @@ class IGMC(GNN):
             edge_type_ = edge_type[edge_index[0] == node]
             neighbors = edge_index[1][edge_index[0] == node]
 
-            if best == min(self.max_neighbor, len(neighbors)):
+            if best == min(self.max_neighbors, len(neighbors)):
                 if node == start_node:
                     break
                 queue.remove_last()
@@ -320,10 +320,10 @@ class IGMC(GNN):
 
                 continue
 
-            x_neighbors = x[neighbors][: self.max_neighbor]
-            if self.max_neighbor > len(x_neighbors):
+            x_neighbors = x[neighbors][: self.max_neighbors]
+            if self.max_neighbors > len(x_neighbors):
                 pad_0s = torch.zeros(
-                    (self.max_neighbor - len(x_neighbors), x_neighbors.size(-1)),
+                    (self.max_neighbors - len(x_neighbors), x_neighbors.size(-1)),
                     dtype=x_neighbors.dtype,
                     device=x_neighbors.device,
                 )
@@ -349,7 +349,7 @@ class IGMC(GNN):
 
             mask = (mask_neighbors * mask_traversed_nodes) == 0
 
-            if mask.sum() == len(mask) or best == self.max_neighbor - mask.sum():
+            if mask.sum() == len(mask) or best == self.max_neighbors - mask.sum():
                 ## Nếu tất cả các ô đều bị mask thì back về state phía trước
                 queue.remove_last()
 

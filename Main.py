@@ -14,6 +14,7 @@ import numpy as np
 import scipy.io as sio
 import scipy.sparse as ssp
 import torch
+import yaml
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from data_utils import *
@@ -162,6 +163,8 @@ parser.add_argument(
     default=None,
     help="from which epoch's checkpoint to continue training",
 )
+parser.add_argument("--max_neighbors", type=int, default=50)
+parser.add_argument("--max_walks", type=int, default=10)
 parser.add_argument(
     "--lr", type=float, default=1e-3, metavar="LR", help="learning rate (default: 1e-3)"
 )
@@ -237,9 +240,32 @@ args = parser.parse_args()
 torch.manual_seed(args.seed)
 if torch.cuda.is_available():
     torch.cuda.manual_seed(args.seed)
-print(args)
+
 random.seed(args.seed)
 np.random.seed(args.seed)
+
+path_config_datasets = "config_datasets.yaml"
+assert os.path.isfile(f"./{path_config_datasets}")
+with open(path_config_datasets) as stream:
+    try:
+        config_dataset = yaml.safe_load(stream)
+    except yaml.YAMLError as exc:
+        print(exc)
+        exit()
+
+if not args.data_name in config_dataset.keys():
+    print(f"Err: Config of dataset {args.data_name} not in: config_datasets.yaml")
+    exit(1)
+
+config_dataset = config_dataset[args.data_name]
+for k, v in config_dataset.items():
+    if k == "lr":
+        setattr(args, k, float(v))
+    else:
+        setattr(args, k, v)
+
+print(args)
+
 args.hop = int(args.hop)
 if args.max_nodes_per_hop is not None:
     args.max_nodes_per_hop = int(args.max_nodes_per_hop)
@@ -537,6 +563,8 @@ else:
         n_side_features=n_features,
         multiply_by=multiply_by,
         batch_size=args.batch_size,
+        max_neighbors=args.max_neighbors,
+        max_walks=args.max_walks,
     )
     total_params = sum(p.numel() for param in model.parameters() for p in param)
     print(f"Total number of parameters is {total_params}")

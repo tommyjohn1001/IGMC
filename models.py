@@ -202,6 +202,21 @@ class DGCNN_RS(DGCNN):
             return F.log_softmax(x, dim=-1)
 
 
+class Queue:
+    def __init__(self) -> None:
+        self.queue = list()
+
+    def enqueue(self, item):
+        self.queue.append(item)
+
+    def remove_last(self):
+        del self.queue[-1]["accumulated"]
+        del self.queue[-1]
+
+    def get_last(self):
+        return self.queue[-1]
+
+
 class IGMC(GNN):
     # The GNN model of Inductive Graph-based Matrix Completion.
     # Use RGCN convolution + center-nodes readout.
@@ -237,8 +252,7 @@ class IGMC(GNN):
         if side_features:
             self.lin1 = Linear(2 * sum(latent_dim) + n_side_features, 128)
 
-        ## TODO: Think about the architecture/components of network
-        self.max_neighbor = 50
+        self.max_neighbor = 100
         self.naive_walking_lin1 = nn.Linear(128, self.max_neighbor)
         self.naive_walking_lin2 = nn.Linear(128, 1)
         # self.edge_embd = nn.Linear(1, 128)
@@ -263,21 +277,62 @@ class IGMC(GNN):
         accumulated = x[node]
         is_reaching_target = False
         h, c = 0, 0
+        queue = Queue()
+
+        ## Init queueu
+        queue.enqueue(
+            {
+                "h": h,
+                "c": c,
+                "node": node,
+                "best": 0,
+                "accumulated": accumulated,
+                "traversed_node": traversed_node,
+            }
+        )
+        longest_walk = {"n_walks": 1, "accumulated": accumulated}
+
+        ## Start walking
         while not is_reaching_target and n_walks < max_walks:
-            # print(f"==> node: {node}")
+            item = queue.get_last()
+            h, c, node, best, accumulated, traversed_node = (
+                item["h"],
+                item["c"],
+                item["node"],
+                item["best"],
+                item["accumulated"],
+                item["traversed_node"],
+            )
+
             edge_type_ = edge_type[edge_index[0] == node]
-            neighbors, _ = torch.sort(edge_index[1][edge_index[0] == node], -1)
+            neighbors = edge_index[1][edge_index[0] == node]
 
-            if len(neighbors) == 0:
-                accumulated += x[end_node]
-                break
+            if best == min(self.max_neighbor, len(neighbors)):
+                if node == start_node:
+                    break
+                queue.remove_last()
+                last = queue.get_last()
+                last["best"] += 1
 
+                continue
+
+            x_neighbors = x[neighbors][: self.max_neighbor]
+            if self.max_neighbor > len(x_neighbors):
+                pad_0s = torch.zeros(
+                    (self.max_neighbor - len(x_neighbors), x_neighbors.size(-1)),
+                    dtype=x_neighbors.dtype,
+                    device=x_neighbors.device,
+                )
+                x_neighbors = torch.cat((x_neighbors, pad_0s), 0)
+
+            tau = 0.1
             selection_dist = self.naive_walking_lin1(accumulated)
+            selection_dist = selection_dist / tau
 
             ## Thiết lập các mask
             ## Do masking to selection_dist : lý do là vì network thì là cố định output, mà số lượng neightbor
             ## của mỗi node là không cố định
-            mask_neighbors = torch.ones_like(selection_dist) * 0
+            mask_neighbors = torch.zeros_like(selection_dist)
             mask_neighbors[: len(neighbors)] = 1
 
             mask_traversed_nodes = torch.ones_like(selection_dist)
@@ -290,13 +345,23 @@ class IGMC(GNN):
 
             mask = (mask_neighbors * mask_traversed_nodes) == 0
 
-            selection_dist = selection_dist.masked_fill_(mask, float("-inf"))
+            if mask.sum() == len(mask) or best == self.max_neighbor - mask.sum():
+                ## Nếu tất cả các ô đều bị mask thì back về state phía trước
+                queue.remove_last()
 
-            ## ở đây có thể áp dụng tiếp softmax rồi argmax hoặc soft argmax
-            selected_neighbor = torch.argmax(torch.softmax(selection_dist, -1), -1)
-            # [1]
+                item = queue.get_last()
+                item["best"] += 1
+
+                continue
+
+            # TODO: Implement backing up neighbors and associations so that when this node can move, back to previous node to select second best candidate
+            selection_dist = selection_dist.masked_fill_(mask, float("-inf"))
+            selected_neighbor_softmax = torch.softmax(selection_dist, -1)
+            _, indices = torch.sort(selected_neighbor_softmax, -1, descending=True)
+            selected_neighbor = indices[best]
             selected_node = neighbors[selected_neighbor]
-            selected_node_embd = x[selected_node].unsqueeze(0)
+            selected_neighbor_softmax = selected_neighbor_softmax.unsqueeze(0)
+            selected_node_embd = selected_neighbor_softmax @ x_neighbors
             selected_edge_type = edge_type_[selected_neighbor]
             selected_edge_embd = self.edge_embd(selected_edge_type.unsqueeze(0))
 
@@ -308,17 +373,35 @@ class IGMC(GNN):
             else:
                 h, c = self.lin_embd(total, (h, c))
             # [bsz, 128]
-            accumulated += h.squeeze(0)
+            accumulated = accumulated + h.squeeze(0)
+
+            node = selected_node
+            new_traversed_node = traversed_node.copy()
+            new_traversed_node.add(node.item())
+            n_walks += 1
+
+            ## Save state
+            queue.enqueue(
+                {
+                    "h": h,
+                    "c": c,
+                    "node": node,
+                    "best": 0,
+                    "accumulated": accumulated,
+                    "traversed_node": new_traversed_node,
+                }
+            )
+
+            if n_walks > longest_walk["n_walks"]:
+                longest_walk["n_walks"] = n_walks
+                longest_walk["accumulated"] = accumulated
 
             if selected_node == end_node:
                 is_reaching_target = True
 
-            node = selected_node
-            traversed_node.add(node.item())
+                longest_walk = {"n_walks": n_walks + 1, "accumulated": accumulated}
 
-            n_walks += 1
-
-        return accumulated / len(traversed_node)
+        return longest_walk["accumulated"] / longest_walk["n_walks"]
 
     def forward(self, data):
         start = time.time()
@@ -348,6 +431,7 @@ class IGMC(GNN):
 
         ## Bắt đầu NRW
         accum_n_nodes = 0
+        max_walks = 20
         start_nodes, end_nodes = torch.where(users)[0], torch.where(items)[0]
         accumulations = []
         for bsz, (start_node, end_node) in enumerate(zip(start_nodes, end_nodes)):
@@ -363,7 +447,7 @@ class IGMC(GNN):
             end_node = end_node - accum_n_nodes
 
             accumulation = self.naive_reasoning_walking(
-                concat_states_b, edge_index_b, edge_type_b, 21, start_node, end_node
+                concat_states_b, edge_index_b, edge_type_b, max_walks, start_node, end_node
             )
             accumulations.append(accumulation.unsqueeze(0))
 

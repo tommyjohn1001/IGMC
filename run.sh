@@ -14,13 +14,13 @@
 ## 2. Train
 
 ## Train with dataset Flixster
-# python -W ignore Main.py --data-name flixster --hop 3 --epochs 200 --testing --ensemble --continue-from 80 > logs/Dec1_flixster.log
+# CUDA_VISIBLE_DEVICES=1 python Main.py --data-name flixster --exp_name nrw0.2
 
-# CUDA_VISIBLE_DEVICES=1 python -W ignore Main.py --data-name douban --hop 3 --epochs 100 --testing --ensemble --continue-from 40 > logs/Dec1_douban.log
+# CUDA_VISIBLE_DEVICES=1 python Main.py --data-name douban --exp_name nrw0.2
 
-CUDA_VISIBLE_DEVICES=0 python Main.py --data-name yahoo_music --lr 1e-5 --epochs 100 --testing --ensemble > logs/Dec1_yahoo.log
+# CUDA_VISIBLE_DEVICES=1 python Main.py --data-name yahoo_music --exp_name nrw0.2
 
 ## Train with dataset MovieLens-100k
-# CUDA_VISIBLE_DEVICES=1 python Main.py --data-name ml_100k --save-appendix _mnph200 --data-appendix _mnph200 --epochs 150 --max-nodes-per-hop 200 --testing --ensemble --dynamic-train > logs/Dec1_movie_100k.log
+# CUDA_VISIBLE_DEVICES=1 python Main.py --data-name ml_100k --exp_name nrw0.2
 
-# python Main.py --data-name ml_1m --save-appendix _mnhp100 --data-appendix _mnph100 --max-nodes-per-hop 100 --testing --epochs 100 --save-interval 5  --lr-decay-step-size 20 --ensemble --dynamic-train > logs/Dec1_movie_1M.log
+# CUDA_VISIBLE_DEVICES=1 python Main.py --data-name ml_1m  --exp_name nrw0.2

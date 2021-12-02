@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from sklearn.model_selection import StratifiedKFold
 from torch import tensor
 from torch.optim import Adam
+from torch.optim.lr_scheduler import LambdaLR
 from torch_geometric.loader import DataLoader
 from torch_geometric.loader import DenseDataLoader as DenseLoader
 from tqdm import tqdm
@@ -22,6 +23,21 @@ import matplotlib.pyplot as plt
 from util_functions import PyGGraph_to_nx
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+
+def get_linear_schedule_with_warmup(
+    optimizer, num_warmup_steps, num_training_steps, init_lr=5e-4, last_epoch=-1
+):
+    def lr_lambda(current_step: int):
+        if current_step < num_warmup_steps:
+            return float(current_step) / float(max(1, num_warmup_steps)) + init_lr
+        return max(
+            0.0,
+            float(num_training_steps - current_step)
+            / float(max(1, num_training_steps - num_warmup_steps)),
+        )
+
+    return LambdaLR(optimizer, lr_lambda, last_epoch)
 
 
 def train_multiple_epochs(
@@ -39,6 +55,8 @@ def train_multiple_epochs(
     logger=None,
     continue_from=None,
     res_dir=None,
+    percent_warmup=0.15,
+    init_lr=5e-4,
 ):
 
     rmses = []
@@ -56,6 +74,11 @@ def train_multiple_epochs(
 
     model.to(device).reset_parameters()
     optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    n_training_steps = int(epochs * len(train_dataset) / batch_size)
+    lr_scheduler = get_linear_schedule_with_warmup(
+        optimizer, n_training_steps * percent_warmup, n_training_steps, init_lr
+    )
+
     start_epoch = 1
     if continue_from is not None:
         model.load_state_dict(
@@ -80,6 +103,7 @@ def train_multiple_epochs(
         train_loss = train(
             model,
             optimizer,
+            lr_scheduler,
             train_loader,
             device,
             regression=True,
@@ -152,7 +176,15 @@ def num_graphs(data):
 
 
 def train(
-    model, optimizer, loader, device, regression=False, ARR=0, show_progress=False, epoch=None
+    model,
+    optimizer,
+    lr_scheduler,
+    loader,
+    device,
+    regression=False,
+    ARR=0,
+    show_progress=False,
+    epoch=None,
 ):
     model.train()
     total_loss = 0
@@ -180,6 +212,7 @@ def train(
         loss.backward()
         total_loss += loss.item() * num_graphs(data)
         optimizer.step()
+        lr_scheduler.step()
         torch.cuda.empty_cache()
     return total_loss / len(loader.dataset)
 

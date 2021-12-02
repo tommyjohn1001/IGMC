@@ -234,6 +234,8 @@ class IGMC(GNN):
         n_side_features=0,
         multiply_by=1,
         batch_size=4,
+        max_neighbors=50,
+        max_walks=10,
     ):
         super(IGMC, self).__init__(
             dataset, GCNConv, latent_dim, regression, adj_dropout, force_undirected
@@ -252,8 +254,10 @@ class IGMC(GNN):
         if side_features:
             self.lin1 = Linear(2 * sum(latent_dim) + n_side_features, 128)
 
-        self.max_neighbor = 100
-        self.naive_walking_lin1 = nn.Linear(128, self.max_neighbor)
+        ## TODO: Think about the architecture/components of network
+        self.max_neighbors = max_neighbors
+        self.max_walks = max_walks
+        self.naive_walking_lin1 = nn.Linear(128, self.max_neighbors)
         self.naive_walking_lin2 = nn.Linear(128, 1)
         # self.edge_embd = nn.Linear(1, 128)
         # self.lin_embd = nn.Sequential(nn.Linear(256, 256), nn.Tanh())

@@ -363,6 +363,13 @@ class IGMC(GNN):
             selected_neighbor_softmax = torch.softmax(selection_dist, -1)
             _, indices = torch.sort(selected_neighbor_softmax, -1, descending=True)
             selected_neighbor = indices[best]
+            if selected_neighbor > len(neighbors):
+                queue.remove_last()
+
+                item = queue.get_last()
+                item["best"] += 1
+
+                continue
             selected_node = neighbors[selected_neighbor]
             selected_neighbor_softmax = selected_neighbor_softmax.unsqueeze(0)
             selected_node_embd = selected_neighbor_softmax @ x_neighbors

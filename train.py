@@ -34,7 +34,7 @@ if __name__ == "__main__":
     name = f"{args.data_name}_{args.exp_name}_{now}"
 
     callback_ckpt = ModelCheckpoint(
-        dirpath=osp.join(root_logging, name, now, "ckpts"),
+        dirpath=osp.join(root_logging, name, "ckpts"),
         monitor="val_loss",
         filename="{epoch}-{val_loss:.2f}",
         mode="min",

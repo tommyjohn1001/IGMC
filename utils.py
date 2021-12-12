@@ -170,6 +170,7 @@ def get_args():
     # general settings
 
     parser.add_argument("--gpus", "-g", default="0")
+    parser.add_argument("--ckpt", "-c", default=None)
     parser.add_argument(
         "--testing",
         action="store_true",

@@ -31,7 +31,7 @@ douban:
   ensemble: True
   # continue_from: 40
   lr: 8e-3
-  batch_size: 64
+  batch_size: 128
   max_neighbors: 50
   max_walks: 10
   percent_warmup: 0.2

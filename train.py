@@ -1,10 +1,10 @@
 from all_packages import *
-from utils import IGMCLitModel, get_args, get_model, get_train_val_datasets
+from utils import *
+
+dotenv.load_dotenv(override=True)
 
 if __name__ == "__main__":
     args = get_args()
-
-    root_logging = "logs"
 
     hparams = {
         "batch_size": args.batch_size,
@@ -15,6 +15,7 @@ if __name__ == "__main__":
         "gradient_clip_val": 1,
         "ARR": args.ARR,
         "regression": True,
+        "weight_decay": 1e-4,
     }
 
     train_graphs, test_graphs, u_features, v_features, class_values = get_train_val_datasets(args)
@@ -27,14 +28,25 @@ if __name__ == "__main__":
     model = get_model(args, train_graphs, u_features, v_features, class_values)
 
     ## Create things belonging to pytorch lightning
-    now = datetime.now() + timedelta(hours=7)
+    hparams["num_training_steps"] = len(train_graphs) * hparams["max_epochs"] / args.batch_size
+    root_logging = "logs"
+    now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H-%M-%S")
+    name = f"{args.data_name}_{args.exp_name}_{now}"
+
     callback_ckpt = ModelCheckpoint(
-        dirpath=root_logging, monitor="val_acc", filename="{epoch}-{val_acc:.2f}", mode="max"
+        dirpath=osp.join(root_logging, name, now, "ckpts"),
+        monitor="val_loss",
+        filename="{epoch}-{val_loss:.2f}",
+        mode="min",
     )
     callback_tqdm = TQDMProgressBar(refresh_rate=5)
     callback_lrmornitor = LearningRateMonitor(logging_interval="step")
-    logger_tboard = TensorBoardLogger(root_logging, version=now.strftime("%b%d-%H:%M:%S"))
-    # logger_wandb = WandbLogger()
+    logger_tboard = TensorBoardLogger(
+        root_logging,
+        name=name,
+        version=now,
+    )
+    logger_wandb = WandbLogger(name, root_logging)
 
     lit_model = IGMCLitModel(model, hparams)
 
@@ -43,13 +55,11 @@ if __name__ == "__main__":
         max_epochs=hparams["max_epochs"],
         gradient_clip_val=hparams["gradient_clip_val"],
         callbacks=[callback_ckpt, callback_tqdm, callback_lrmornitor],
-        # FIXME: uncomment this and remove the following
-        # logger=logger_wandb,
-        logger=logger_tboard,
+        logger=logger_wandb if args.use_wandb else logger_tboard,
     )
 
     trainer.fit(
-        lit_model, train_dataloader=train_loader, val_dataloaders=val_loader, ckpt_path=args.ckpt
+        lit_model, train_dataloaders=train_loader, val_dataloaders=val_loader, ckpt_path=args.ckpt
     )
 
     # final_test_model(args)

@@ -358,12 +358,11 @@ class IGMC(GNN):
 
                 continue
 
-            # TODO: Implement backing up neighbors and associations so that when this node can move, back to previous node to select second best candidate
             selection_dist = selection_dist.masked_fill_(mask, float("-inf"))
             selected_neighbor_softmax = torch.softmax(selection_dist, -1)
             _, indices = torch.sort(selected_neighbor_softmax, -1, descending=True)
             selected_neighbor = indices[best]
-            if selected_neighbor > len(neighbors):
+            if selected_neighbor >= len(neighbors):
                 queue.remove_last()
 
                 item = queue.get_last()

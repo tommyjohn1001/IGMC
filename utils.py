@@ -467,13 +467,19 @@ class IGMCLitModel(LightningModule):
         else:
             loss = F.nll_loss(out, batch.y.view(-1), reduction="sum").item()
 
-        return loss
+        return loss, len(batch.y)
 
     def validation_epoch_end(self, outputs) -> None:
-        mse_loss = sum(outputs) / len(outputs)
+        mse, total = 0, 0
+        for output in outputs:
+            mse += output[0]
+            total += output[1]
+        mse_loss = mse / total
         rmse = math.sqrt(mse_loss)
 
         self.log("val_loss", rmse, on_epoch=True)
+
+        return rmse
 
     def configure_optimizers(self):
         optimizer = Adam(
@@ -487,7 +493,7 @@ class IGMCLitModel(LightningModule):
         scheduler = {
             "scheduler": get_linear_schedule_with_warmup(
                 optimizer,
-                self._hparams["num_training_steps"] * 0.15,
+                self._hparams["num_training_steps"] * 0.2,
                 self._hparams["num_training_steps"],
                 self._hparams["init_lr"],
             ),
@@ -498,6 +504,15 @@ class IGMCLitModel(LightningModule):
         return [optimizer], [scheduler]
 
 
-def final_test_model(args):
-    ## TODO: Implement later
-    pass
+def final_test_model(path_dir_ckpt, model, trainer, val_loader):
+    path_ckpts = glob(osp.join(path_dir_ckpt, "*.ckpt"))
+    assert len(path_ckpts) > 0, "No ckpt found"
+
+    rmses = []
+    for path_ckpt in path_ckpts:
+        rmse = trainer.validate(model, val_loader, path_ckpt)
+        rmses.append(rmse)
+
+    rmse = sum(rmses) / len(rmses)
+
+    logger.info(f"Final ensemble RMSE: {rmse:4f}")

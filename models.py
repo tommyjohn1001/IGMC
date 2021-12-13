@@ -214,6 +214,9 @@ class Queue:
         del self.queue[-1]
 
     def get_last(self):
+        if len(self.queue) == 0:
+            return None
+
         return self.queue[-1]
 
 
@@ -316,6 +319,9 @@ class IGMC(GNN):
                     break
                 queue.remove_last()
                 last = queue.get_last()
+                if last is None:
+                    break
+
                 last["best"] += 1
 
                 continue
@@ -329,7 +335,7 @@ class IGMC(GNN):
                 )
                 x_neighbors = torch.cat((x_neighbors, pad_0s), 0)
 
-            tau = 0.1
+            tau = 0.25
             selection_dist = self.naive_walking_lin1(accumulated)
             selection_dist = selection_dist / tau
 
@@ -354,6 +360,9 @@ class IGMC(GNN):
                 queue.remove_last()
 
                 item = queue.get_last()
+                if item is None:
+                    break
+
                 item["best"] += 1
 
                 continue
@@ -366,6 +375,9 @@ class IGMC(GNN):
                 queue.remove_last()
 
                 item = queue.get_last()
+                if item is None:
+                    break
+
                 item["best"] += 1
 
                 continue

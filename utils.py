@@ -454,7 +454,6 @@ class IGMCLitModel(LightningModule):
 
     def validation_step(self, batch, batch_idx):
         out, _ = self.model(batch)
-
         mse = F.mse_loss(out, batch.y.view(-1), reduction="sum").item()
 
         return mse, len(batch.y)

@@ -218,10 +218,11 @@ class Queue:
 
 
 class CustomContrastiveLoss(nn.Module):
-    def __init__(self, temperature=0.07):
+    def __init__(self, temperature=0.07, num_relations=1):
         super().__init__()
 
         self.temperature = temperature
+        self.batchnorm = nn.BatchNorm1d(num_relations)
 
     def forward(self, rate_embds, pred, ys):
         # rate_embds: [n, 128]
@@ -234,6 +235,7 @@ class CustomContrastiveLoss(nn.Module):
         # for numerical stability
         logits_max, _ = torch.max(dot_result, dim=1, keepdim=True)
         logits = dot_result - logits_max.detach()
+        logits = self.batchnorm(logits)
         logits = torch.exp(logits)
         # [bz, n]
 

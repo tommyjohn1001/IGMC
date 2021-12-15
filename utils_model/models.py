@@ -68,6 +68,8 @@ class IGMC(GNN):
         self.edge_embd = nn.Embedding(num_relations, 128)
         self.lin_embd = nn.LSTMCell(256, 128)
 
+        self.contrastive_criterion = CustomContrastiveLoss(self.temperature, num_relations)
+
     def naive_reasoning_walking(self, x, edge_index, edge_type, max_walks, start_node, end_node):
         # x: [n_nodes, 128]
         # edge_index: [2: n_edges]
@@ -288,23 +290,29 @@ class IGMC(GNN):
         loss = 0
 
         ## MSE loss
-        loss = loss + F.mse_loss(x[:, 0], data.y.view(-1), reduction="sum").item()
+        loss_mse = F.mse_loss(x[:, 0] * self.multiply_by, data.y.view(-1))
 
         ## ARR loss
+        loss_arr = 0
         if self.ARR > 0:
             for gconv in self.convs:
                 w = torch.matmul(gconv.comp, gconv.weight.view(gconv.num_bases, -1)).view(
                     gconv.num_relations, gconv.in_channels, gconv.out_channels
                 )
                 reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :]) ** 2)
-                loss += self.ARR * reg_loss
+                loss_arr = self.ARR * reg_loss
 
         ## Custom Contrastive loss
         if self.contrastive_loss is True:
             edgetype_indx = [self.map_edgetype2id[int(edgetype.item())] for edgetype in data.y]
             edgetype_indx = torch.tensor(edgetype_indx, dtype=torch.int64, device=data.y.device)
-            loss = loss + CustomContrastiveLoss(self.temperature)(
+            loss_contrastive = self.contrastive_criterion(
                 self.edge_embd.weight, x_128, edgetype_indx
             )
+
+        loss = loss_mse + loss_arr + loss_contrastive
+        if torch.isnan(loss):
+            print(f"{loss_mse} - {loss_arr} - {loss_contrastive}")
+            exit(1)
 
         return x[:, 0], loss

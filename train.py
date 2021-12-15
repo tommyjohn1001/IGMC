@@ -16,16 +16,20 @@ if __name__ == "__main__":
         "ARR": args.ARR,
         "regression": True,
         "weight_decay": 1e-4,
+        "contrastive_loss": True,
+        "temperature": 0.1,
     }
 
     train_graphs, test_graphs, u_features, v_features, class_values = get_train_val_datasets(args)
+    print("All ratings are:")
+    print(class_values)
     train_loader = DataLoader(
         train_graphs, hparams["batch_size"], shuffle=True, num_workers=hparams["num_workers"]
     )
     val_loader = DataLoader(
         test_graphs, hparams["batch_size"], shuffle=False, num_workers=hparams["num_workers"]
     )
-    model = get_model(args, train_graphs, u_features, v_features, class_values)
+    model = get_model(args, hparams, train_graphs, u_features, v_features, class_values)
 
     ## Create things belonging to pytorch lightning
     hparams["num_training_steps"] = len(train_graphs) * hparams["max_epochs"] / args.batch_size

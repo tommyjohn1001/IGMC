@@ -389,7 +389,7 @@ def get_args():
     return args
 
 
-def get_model(args, train_dataset, u_features, v_features, class_values):
+def get_model(args, hparams, train_dataset, u_features, v_features, class_values):
     if args.use_features:
         u_features, v_features = u_features.toarray(), v_features.toarray()
         n_features = u_features.shape[1] + v_features.shape[1]
@@ -423,6 +423,10 @@ def get_model(args, train_dataset, u_features, v_features, class_values):
         batch_size=args.batch_size,
         max_neighbors=args.max_neighbors,
         max_walks=args.max_walks,
+        class_values=class_values,
+        ARR=hparams["ARR"],
+        contrastive_loss=hparams["contrastive_loss"],
+        temperature=hparams["temperature"],
     )
 
     return model

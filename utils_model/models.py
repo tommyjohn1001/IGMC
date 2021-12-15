@@ -30,7 +30,10 @@ class IGMC(GNN):
         batch_size=4,
         max_neighbors=50,
         max_walks=10,
+        class_values=None,
         ARR=0.01,
+        contrastive_loss=True,
+        temperature=0.1,
     ):
         super(IGMC, self).__init__(
             dataset, GCNConv, latent_dim, regression, adj_dropout, force_undirected
@@ -38,6 +41,9 @@ class IGMC(GNN):
 
         self.batch_size = batch_size
         self.ARR = ARR
+        self.contrastive_loss = contrastive_loss
+        self.temperature = temperature
+        self.map_edgetype2id = {v: i for i, v in enumerate(class_values)}
 
         self.multiply_by = multiply_by
         self.convs = torch.nn.ModuleList()
@@ -127,9 +133,8 @@ class IGMC(GNN):
                 )
                 x_neighbors = torch.cat((x_neighbors, pad_0s), 0)
 
-            tau = 0.25
             selection_dist = self.naive_walking_lin1(accumulated)
-            selection_dist = selection_dist / tau
+            selection_dist = selection_dist / self.temperature
 
             ## Thiết lập các mask
             ## Do masking to selection_dist : lý do là vì network thì là cố định output, mà số lượng neightbor
@@ -283,7 +288,7 @@ class IGMC(GNN):
         loss = 0
 
         ## MSE loss
-        loss = loss + F.mse_loss(x[:, 0], batch.y.view(-1), reduction="sum").item()
+        loss = loss + F.mse_loss(x[:, 0], data.y.view(-1), reduction="sum").item()
 
         ## ARR loss
         if self.ARR > 0:
@@ -296,8 +301,10 @@ class IGMC(GNN):
 
         ## Custom Contrastive loss
         if self.contrastive_loss is True:
+            edgetype_indx = [self.map_edgetype2id[int(edgetype.item())] for edgetype in data.y]
+            edgetype_indx = torch.tensor(edgetype_indx, dtype=torch.int64, device=data.y.device)
             loss = loss + CustomContrastiveLoss(self.temperature)(
-                self.lin_embd.weight, x_128, data.y
+                self.edge_embd.weight, x_128, edgetype_indx
             )
 
-        return loss, x[:, 0]
+        return x[:, 0], loss

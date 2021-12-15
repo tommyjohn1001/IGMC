@@ -1,10 +1,10 @@
 from all_packages import *
 from data_utils import *
-from models import *
 from preprocessing import *
 from train_eval import *
 from train_eval import get_linear_schedule_with_warmup
 from util_functions import *
+from utils_model.models import *
 
 
 def get_train_val_datasets(args):
@@ -439,19 +439,7 @@ class IGMCLitModel(LightningModule):
         pass
 
     def training_step(self, batch, batch_idx):
-        out = self.model(batch)
-        if self._hparams["regression"]:
-            loss = F.mse_loss(out, batch.y.view(-1))
-        else:
-            loss = F.nll_loss(out, batch.y.view(-1))
-
-        if self._hparams["ARR"] != 0:
-            for gconv in self.model.convs:
-                w = torch.matmul(gconv.comp, gconv.weight.view(gconv.num_bases, -1)).view(
-                    gconv.num_relations, gconv.in_channels, gconv.out_channels
-                )
-                reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :]) ** 2)
-                loss += self._hparams["ARR"] * reg_loss
+        _, loss = self.model(batch)
 
         self.log("train_loss", loss, on_step=True, on_epoch=True)
 
@@ -461,13 +449,11 @@ class IGMCLitModel(LightningModule):
         pass
 
     def validation_step(self, batch, batch_idx):
-        out = self.model(batch)
-        if self._hparams["regression"]:
-            loss = F.mse_loss(out, batch.y.view(-1), reduction="sum").item()
-        else:
-            loss = F.nll_loss(out, batch.y.view(-1), reduction="sum").item()
+        out, _ = self.model(batch)
 
-        return loss, len(batch.y)
+        mse = F.mse_loss(out, batch.y.view(-1), reduction="sum").item()
+
+        return mse, len(batch.y)
 
     def validation_epoch_end(self, outputs) -> None:
         mse, total = 0, 0

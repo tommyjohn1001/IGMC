@@ -18,10 +18,10 @@ import yaml
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from data_utils import *
-from models import *
 from preprocessing import *
 from train_eval import *
 from util_functions import *
+from utils_model.models import *
 
 
 # used to traceback which code cause warnings, can delete

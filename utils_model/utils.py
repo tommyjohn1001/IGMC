@@ -222,7 +222,6 @@ class CustomContrastiveLoss(nn.Module):
         super().__init__()
 
         self.temperature = temperature
-        self.batchnorm = nn.BatchNorm1d(num_relations)
 
     def forward(self, rate_embds, pred, ys):
         # rate_embds: [n, 128]
@@ -234,9 +233,7 @@ class CustomContrastiveLoss(nn.Module):
         dot_result = pred @ rate_embds.T / self.temperature
         # for numerical stability
         logits_max, _ = torch.max(dot_result, dim=1, keepdim=True)
-        logits = dot_result - logits_max.detach()
-        logits = self.batchnorm(logits)
-        logits = torch.exp(logits)
+        logits = dot_result - logits_max
         # [bz, n]
 
         onehots = F.one_hot(ys, num_classes=n)
@@ -244,10 +241,10 @@ class CustomContrastiveLoss(nn.Module):
 
         positive = (logits * onehots).sum(-1)
         # [bz]
-        negatives = (logits * (1 - onehots)).sum(-1)
-
-        loss = -torch.log(positive / negatives)
+        total = torch.logsumexp(logits, -1)
         # [bz]
-        loss = torch.mean(loss)
+
+        loss = -torch.mean(positive - total)
+        # [bz]
 
         return loss

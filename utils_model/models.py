@@ -300,7 +300,7 @@ class IGMC(GNN):
                     gconv.num_relations, gconv.in_channels, gconv.out_channels
                 )
                 reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :]) ** 2)
-                loss_arr = self.ARR * reg_loss
+                loss_arr = reg_loss
 
         ## Custom Contrastive loss
         if self.contrastive_loss is True:
@@ -310,9 +310,11 @@ class IGMC(GNN):
                 self.edge_embd.weight, x_128, edgetype_indx
             )
 
-        loss = loss_mse + loss_arr + loss_contrastive
+        loss = loss_mse + self.ARR * loss_arr + 0.5 * loss_contrastive
         if torch.isnan(loss):
-            print(f"{loss_mse} - {loss_arr} - {loss_contrastive}")
+            print(f"NaN: {loss_mse} - {loss_arr} - {loss_contrastive}")
             exit(1)
+        if loss < 0:
+            print(f"below 0: {loss_mse} - {loss_arr} - {loss_contrastive}")
 
         return x[:, 0], loss

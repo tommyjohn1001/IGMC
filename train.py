@@ -69,4 +69,4 @@ if __name__ == "__main__":
     )
 
     if args.ensemble:
-        final_test_model(path_dir_ckpt, model, trainer, val_loader)
+        final_test_model(path_dir_ckpt, lit_model, trainer, val_loader)

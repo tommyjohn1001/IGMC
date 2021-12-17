@@ -10,3 +10,4 @@ git_old
 log*
 .vscode
 *.tar.gz
+tests/

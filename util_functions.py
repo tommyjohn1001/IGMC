@@ -377,8 +377,9 @@ def construct_pyg_graph(u, v, r, node_labels, max_node_label, y, node_features):
     if node_features is not None:
         if type(node_features) == list:  # a list of u_feature and v_feature
             u_feature, v_feature = node_features
-            data.u_feature = torch.FloatTensor(u_feature).unsqueeze(0)
-            data.v_feature = torch.FloatTensor(v_feature).unsqueeze(0)
+
+            data.u_feature = torch.FloatTensor(u_feature.toarray()).unsqueeze(0)
+            data.v_feature = torch.FloatTensor(v_feature.toarray()).unsqueeze(0)
         else:
             x2 = torch.FloatTensor(node_features)
             data.x = torch.cat([data.x, x2], 1)

@@ -32,7 +32,7 @@ class IGMC(GNN):
         max_walks=10,
         class_values=None,
         ARR=0.01,
-        contrastive_loss=True,
+        use_contrastive_loss=True,
         temperature=0.1,
     ):
         super(IGMC, self).__init__(
@@ -41,7 +41,7 @@ class IGMC(GNN):
 
         self.batch_size = batch_size
         self.ARR = ARR
-        self.contrastive_loss = contrastive_loss
+        self.use_contrastive_loss = use_contrastive_loss
         self.temperature = temperature
         self.map_edgetype2id = {v: i for i, v in enumerate(class_values)}
 
@@ -219,7 +219,8 @@ class IGMC(GNN):
                 loss_arr = reg_loss
 
         ## Custom Contrastive loss
-        if self.contrastive_loss is True:
+        loss_contrastive = 0
+        if self.use_contrastive_loss is True:
             edgetype_indx = [self.map_edgetype2id[int(edgetype.item())] for edgetype in data.y]
             edgetype_indx = torch.tensor(edgetype_indx, dtype=torch.int64, device=data.y.device)
             loss_contrastive = self.contrastive_criterion(
@@ -257,7 +258,7 @@ class IGMC2(GNN):
         max_walks=10,
         class_values=None,
         ARR=0.01,
-        contrastive_loss=True,
+        use_contrastive_loss=True,
         temperature=0.1,
     ):
         super(IGMC, self).__init__(
@@ -266,7 +267,7 @@ class IGMC2(GNN):
 
         self.batch_size = batch_size
         self.ARR = ARR
-        self.contrastive_loss = contrastive_loss
+        self.use_contrastive_loss = use_contrastive_loss
         self.temperature = temperature
         self.map_edgetype2id = {v: i for i, v in enumerate(class_values)}
 
@@ -528,7 +529,7 @@ class IGMC2(GNN):
                 loss_arr = reg_loss
 
         ## Custom Contrastive loss
-        if self.contrastive_loss is True:
+        if self.use_contrastive_loss is True:
             edgetype_indx = [self.map_edgetype2id[int(edgetype.item())] for edgetype in data.y]
             edgetype_indx = torch.tensor(edgetype_indx, dtype=torch.int64, device=data.y.device)
             loss_contrastive = self.contrastive_criterion(

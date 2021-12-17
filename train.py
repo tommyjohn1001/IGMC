@@ -16,7 +16,7 @@ if __name__ == "__main__":
         "ARR": args.ARR,
         "regression": True,
         "weight_decay": 1e-4,
-        "contrastive_loss": True,
+        "use_contrastive_loss": False,
         "temperature": 0.1,
     }
 

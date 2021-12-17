@@ -425,7 +425,7 @@ def get_model(args, hparams, train_dataset, u_features, v_features, class_values
         max_walks=args.max_walks,
         class_values=class_values,
         ARR=hparams["ARR"],
-        contrastive_loss=hparams["contrastive_loss"],
+        use_contrastive_loss=hparams["use_contrastive_loss"],
         temperature=hparams["temperature"],
     )
 
@@ -500,8 +500,7 @@ def final_test_model(path_dir_ckpt, model, trainer, val_loader):
     rmses = []
     for path_ckpt in path_ckpts:
         rmse = trainer.validate(model, val_loader, path_ckpt)
-        rmses.append(rmse)
-
+        rmses.append(rmse[0]["val_loss"])
     rmse = sum(rmses) / len(rmses)
 
     logger.info(f"Final ensemble RMSE: {rmse:4f}")

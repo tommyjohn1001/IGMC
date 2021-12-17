@@ -84,6 +84,231 @@ class IGMC(GNN):
         accumulated = x[node]
         is_reaching_target = False
         h, c = 0, 0
+        while not is_reaching_target and n_walks < max_walks:
+            # print(f"==> node: {node}")
+            edge_type_ = edge_type[edge_index[0] == node]
+            neighbors = edge_index[1][edge_index[0] == node]
+
+            if len(neighbors) == 0:
+                accumulated += x[end_node]
+                break
+
+            selection_dist = self.naive_walking_lin1(accumulated)
+
+            ## Thiết lập các mask
+            ## Do masking to selection_dist : lý do là vì network thì là cố định output, mà số lượng neightbor
+            ## của mỗi node là không cố định
+            mask_neighbors = torch.ones_like(selection_dist) * 0
+            mask_neighbors[: len(neighbors)] = 1
+
+            mask_traversed_nodes = torch.ones_like(selection_dist)
+            for i, neighbor in enumerate(neighbors):
+                if i >= len(mask_traversed_nodes):
+                    break
+
+                if neighbor.item() in traversed_node:
+                    mask_traversed_nodes[i] = 0
+
+            mask = (mask_neighbors * mask_traversed_nodes) == 0
+
+            selection_dist = selection_dist.masked_fill_(mask, float("-inf"))
+
+            ## ở đây có thể áp dụng tiếp softmax rồi argmax hoặc soft argmax
+            selected_neighbor = torch.argmax(torch.softmax(selection_dist, -1), -1)
+            # [1]
+            selected_node = neighbors[selected_neighbor]
+            selected_node_embd = x[selected_node].unsqueeze(0)
+            selected_edge_type = edge_type_[selected_neighbor]
+            selected_edge_embd = self.edge_embd(selected_edge_type.unsqueeze(0))
+
+            ## dùng cơ chế cộng để accumulate hoặc áp dụng memorynet
+            total = torch.cat((selected_node_embd, selected_edge_embd), -1)
+            # [b, 256]
+            if not torch.is_tensor(h):
+                h, c = self.lin_embd(total)
+            else:
+                h, c = self.lin_embd(total, (h, c))
+            # [bsz, 128]
+            accumulated += h.squeeze(0)
+
+            if selected_node == end_node:
+                is_reaching_target = True
+
+            node = selected_node
+            traversed_node.add(node.item())
+
+            n_walks += 1
+
+        return accumulated / len(traversed_node)
+
+    def forward(self, data):
+        x, edge_index, edge_type, batch = data.x, data.edge_index, data.edge_type, data.batch
+
+        if self.adj_dropout > 0:
+            edge_index, edge_type = dropout_adj(
+                edge_index,
+                edge_type,
+                p=self.adj_dropout,
+                force_undirected=self.force_undirected,
+                num_nodes=len(x),
+                training=self.training,
+            )
+        concat_states = []
+        for conv in self.convs:
+            x = torch.tanh(conv(x, edge_index, edge_type))
+            concat_states.append(x)
+        concat_states = torch.cat(concat_states, 1)
+
+        ## Lọc ra vị trí user của các batch, user này là user cần predict link, chứ không phải user's neighbor
+        users = data.x[:, 0] == 1
+        ## Lọc ra vị trí movie của các batch, movie này là movie cần predict
+        items = data.x[:, 1] == 1
+        ## vì mỗi batch chỉ cần predict một cặp user-item, nên có 50 batch thì sẽ có 50 user được lọc ra, 50 movie được lọc ra
+        ## mỗi user sẽ được
+
+        ## Bắt đầu NRW
+        accum_n_nodes = 0
+        start_nodes, end_nodes = torch.where(users)[0], torch.where(items)[0]
+        accumulations = []
+        for bsz, (start_node, end_node) in enumerate(zip(start_nodes, end_nodes)):
+            concat_states_b = concat_states[batch == bsz]
+
+            n_nodes = concat_states_b.size(0)
+            edge_b = torch.where(
+                (accum_n_nodes <= edge_index[0]) & (edge_index[0] < accum_n_nodes + n_nodes)
+            )[0]
+            edge_index_b = edge_index[:, edge_b] - accum_n_nodes
+            edge_type_b = edge_type[edge_b]
+            start_node = start_node - accum_n_nodes
+            end_node = end_node - accum_n_nodes
+
+            accumulation = self.naive_reasoning_walking(
+                concat_states_b, edge_index_b, edge_type_b, self.max_walks, start_node, end_node
+            )
+            accumulations.append(accumulation.unsqueeze(0))
+
+            accum_n_nodes += n_nodes
+
+        ## Trích xuất các vector biểu diễn user (chỉ user thôi, không lấy user's neighbor) và
+        ## biểu diễn item (chỉ item thôi chứ không lấy item's neighbors)
+        ## FIXME: Đoạn này tạm thời bỏ qua
+        # x = torch.cat([concat_states[users], concat_states[items]], 1)
+        # if self.side_features:
+        #     x = torch.cat([x, data.u_feature, data.v_feature], 1)
+        x_128 = torch.cat(accumulations, 0)
+        # [bz, 128]
+
+        x = F.relu(self.lin1(x_128))
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = self.lin2(x)
+
+        ## Calculate loss
+        loss = 0
+
+        ## MSE loss
+        loss_mse = F.mse_loss(x[:, 0] * self.multiply_by, data.y.view(-1))
+
+        ## ARR loss
+        loss_arr = 0
+        if self.ARR > 0:
+            for gconv in self.convs:
+                w = torch.matmul(gconv.comp, gconv.weight.view(gconv.num_bases, -1)).view(
+                    gconv.num_relations, gconv.in_channels, gconv.out_channels
+                )
+                reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :]) ** 2)
+                loss_arr = reg_loss
+
+        ## Custom Contrastive loss
+        if self.contrastive_loss is True:
+            edgetype_indx = [self.map_edgetype2id[int(edgetype.item())] for edgetype in data.y]
+            edgetype_indx = torch.tensor(edgetype_indx, dtype=torch.int64, device=data.y.device)
+            loss_contrastive = self.contrastive_criterion(
+                self.edge_embd.weight, x_128, edgetype_indx
+            )
+
+        loss = loss_mse + self.ARR * loss_arr + 0.5 * loss_contrastive
+        if torch.isnan(loss):
+            print(f"NaN: {loss_mse} - {loss_arr} - {loss_contrastive}")
+            exit(1)
+        if loss < 0:
+            print(f"below 0: {loss_mse} - {loss_arr} - {loss_contrastive}")
+
+        return x[:, 0], loss
+
+
+class IGMC2(GNN):
+    # The GNN model of Inductive Graph-based Matrix Completion.
+    # Use RGCN convolution + center-nodes readout.
+    def __init__(
+        self,
+        dataset,
+        gconv=RGCNConv,
+        latent_dim=[32, 32, 32, 32],
+        num_relations=5,
+        num_bases=2,
+        regression=False,
+        adj_dropout=0.2,
+        force_undirected=False,
+        side_features=False,
+        n_side_features=0,
+        multiply_by=1,
+        batch_size=4,
+        max_neighbors=50,
+        max_walks=10,
+        class_values=None,
+        ARR=0.01,
+        contrastive_loss=True,
+        temperature=0.1,
+    ):
+        super(IGMC, self).__init__(
+            dataset, GCNConv, latent_dim, regression, adj_dropout, force_undirected
+        )
+
+        self.batch_size = batch_size
+        self.ARR = ARR
+        self.contrastive_loss = contrastive_loss
+        self.temperature = temperature
+        self.map_edgetype2id = {v: i for i, v in enumerate(class_values)}
+
+        self.multiply_by = multiply_by
+        self.convs = torch.nn.ModuleList()
+        self.convs.append(gconv(dataset.num_features, latent_dim[0], num_relations, num_bases))
+        for i in range(0, len(latent_dim) - 1):
+            self.convs.append(gconv(latent_dim[i], latent_dim[i + 1], num_relations, num_bases))
+        # self.lin1 = Linear(2 * sum(latent_dim), 128)
+        self.lin1 = Linear(128, 128)
+        self.side_features = side_features
+        if side_features:
+            self.lin1 = Linear(2 * sum(latent_dim) + n_side_features, 128)
+
+        self.max_neighbors = max_neighbors
+        self.max_walks = max_walks
+        self.naive_walking_lin1 = nn.Linear(128, self.max_neighbors)
+        self.naive_walking_lin2 = nn.Linear(128, 1)
+        # self.edge_embd = nn.Linear(1, 128)
+        # self.lin_embd = nn.Sequential(nn.Linear(256, 256), nn.Tanh())
+        # self.lin_embd2 = nn.Linear(256, 128, bias=False)
+
+        ## Apply new embedding and LSTMCell instead of simple Linear
+        self.edge_embd = nn.Embedding(num_relations, 128)
+        self.lin_embd = nn.LSTMCell(256, 128)
+
+        self.contrastive_criterion = CustomContrastiveLoss(self.temperature, num_relations)
+
+    def naive_reasoning_walking(self, x, edge_index, edge_type, max_walks, start_node, end_node):
+        # x: [n_nodes, 128]
+        # edge_index: [2: n_edges]
+
+        ## Do something to get start and end nodes
+
+        ## start looping
+
+        n_walks = 0
+        node = start_node
+        traversed_node = set([node.item()])
+        accumulated = x[node]
+        is_reaching_target = False
+        h, c = 0, 0
         queue = Queue()
 
         ## Init queueu

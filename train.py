@@ -11,21 +11,25 @@ if __name__ == "__main__":
         "num_workers": 10,
         "lr": 2e-3,
         "max_epochs": 100,
-        "init_lr": 8e-5,
+        "init_lr": 8e-6,
         "gradient_clip_val": 1,
         "ARR": args.ARR,
         "regression": True,
         "weight_decay": 1e-4,
+        "contrastive_loss": True,
+        "temperature": 0.1,
     }
 
     train_graphs, test_graphs, u_features, v_features, class_values = get_train_val_datasets(args)
+    print("All ratings are:")
+    print(class_values)
     train_loader = DataLoader(
         train_graphs, hparams["batch_size"], shuffle=True, num_workers=hparams["num_workers"]
     )
     val_loader = DataLoader(
         test_graphs, hparams["batch_size"], shuffle=False, num_workers=hparams["num_workers"]
     )
-    model = get_model(args, train_graphs, u_features, v_features, class_values)
+    model = get_model(args, hparams, train_graphs, u_features, v_features, class_values)
 
     ## Create things belonging to pytorch lightning
     hparams["num_training_steps"] = len(train_graphs) * hparams["max_epochs"] / args.batch_size
@@ -33,11 +37,13 @@ if __name__ == "__main__":
     now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H-%M-%S")
     name = f"{args.data_name}_{args.exp_name}_{now}"
 
+    path_dir_ckpt = osp.join(root_logging, "ckpts", name)
     callback_ckpt = ModelCheckpoint(
-        dirpath=osp.join(root_logging, name, "ckpts"),
+        dirpath=path_dir_ckpt,
         monitor="val_loss",
         filename="{epoch}-{val_loss:.2f}",
         mode="min",
+        save_top_k=3,
     )
     callback_tqdm = TQDMProgressBar(refresh_rate=5)
     callback_lrmornitor = LearningRateMonitor(logging_interval="step")
@@ -62,4 +68,5 @@ if __name__ == "__main__":
         lit_model, train_dataloaders=train_loader, val_dataloaders=val_loader, ckpt_path=args.ckpt
     )
 
-    # final_test_model(args)
+    if args.ensemble:
+        final_test_model(path_dir_ckpt, lit_model, trainer, val_loader)

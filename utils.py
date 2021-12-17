@@ -1,10 +1,10 @@
 from all_packages import *
 from data_utils import *
-from models import *
 from preprocessing import *
 from train_eval import *
 from train_eval import get_linear_schedule_with_warmup
 from util_functions import *
+from utils_model.models import *
 
 
 def get_train_val_datasets(args):
@@ -389,7 +389,7 @@ def get_args():
     return args
 
 
-def get_model(args, train_dataset, u_features, v_features, class_values):
+def get_model(args, hparams, train_dataset, u_features, v_features, class_values):
     if args.use_features:
         u_features, v_features = u_features.toarray(), v_features.toarray()
         n_features = u_features.shape[1] + v_features.shape[1]
@@ -423,6 +423,10 @@ def get_model(args, train_dataset, u_features, v_features, class_values):
         batch_size=args.batch_size,
         max_neighbors=args.max_neighbors,
         max_walks=args.max_walks,
+        class_values=class_values,
+        ARR=hparams["ARR"],
+        contrastive_loss=hparams["contrastive_loss"],
+        temperature=hparams["temperature"],
     )
 
     return model
@@ -439,19 +443,7 @@ class IGMCLitModel(LightningModule):
         pass
 
     def training_step(self, batch, batch_idx):
-        out = self.model(batch)
-        if self._hparams["regression"]:
-            loss = F.mse_loss(out, batch.y.view(-1))
-        else:
-            loss = F.nll_loss(out, batch.y.view(-1))
-
-        if self._hparams["ARR"] != 0:
-            for gconv in self.model.convs:
-                w = torch.matmul(gconv.comp, gconv.weight.view(gconv.num_bases, -1)).view(
-                    gconv.num_relations, gconv.in_channels, gconv.out_channels
-                )
-                reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :]) ** 2)
-                loss += self._hparams["ARR"] * reg_loss
+        _, loss = self.model(batch)
 
         self.log("train_loss", loss, on_step=True, on_epoch=True)
 
@@ -461,19 +453,22 @@ class IGMCLitModel(LightningModule):
         pass
 
     def validation_step(self, batch, batch_idx):
-        out = self.model(batch)
-        if self._hparams["regression"]:
-            loss = F.mse_loss(out, batch.y.view(-1), reduction="sum").item()
-        else:
-            loss = F.nll_loss(out, batch.y.view(-1), reduction="sum").item()
+        out, _ = self.model(batch)
+        mse = F.mse_loss(out, batch.y.view(-1), reduction="sum").item()
 
-        return loss
+        return mse, len(batch.y)
 
     def validation_epoch_end(self, outputs) -> None:
-        mse_loss = sum(outputs) / len(outputs)
+        mse, total = 0, 0
+        for output in outputs:
+            mse += output[0]
+            total += output[1]
+        mse_loss = mse / total
         rmse = math.sqrt(mse_loss)
 
         self.log("val_loss", rmse, on_epoch=True)
+
+        return rmse
 
     def configure_optimizers(self):
         optimizer = Adam(
@@ -487,7 +482,7 @@ class IGMCLitModel(LightningModule):
         scheduler = {
             "scheduler": get_linear_schedule_with_warmup(
                 optimizer,
-                self._hparams["num_training_steps"] * 0.15,
+                self._hparams["num_training_steps"] * 0.2,
                 self._hparams["num_training_steps"],
                 self._hparams["init_lr"],
             ),
@@ -498,6 +493,15 @@ class IGMCLitModel(LightningModule):
         return [optimizer], [scheduler]
 
 
-def final_test_model(args):
-    ## TODO: Implement later
-    pass
+def final_test_model(path_dir_ckpt, model, trainer, val_loader):
+    path_ckpts = glob(osp.join(path_dir_ckpt, "*.ckpt"))
+    assert len(path_ckpts) > 0, "No ckpt found"
+
+    rmses = []
+    for path_ckpt in path_ckpts:
+        rmse = trainer.validate(model, val_loader, path_ckpt)
+        rmses.append(rmse)
+
+    rmse = sum(rmses) / len(rmses)
+
+    logger.info(f"Final ensemble RMSE: {rmse:4f}")

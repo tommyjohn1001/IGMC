@@ -1,14 +1,16 @@
-import time
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from all_packages import *
 from torch.nn import Linear
-from torch_geometric.nn import GCNConv, RGCNConv, global_add_pool, global_sort_pool
+from torch_geometric.nn import GCNConv, RGCNConv
 from torch_geometric.utils import dropout_adj
+from train_eval import get_linear_schedule_with_warmup
 from util_functions import *
 
-from utils_model.utils import *
+from utils_model.layers import *
+from utils_model.losses import *
+from utils_model.utils import Queue
 
 
 class IGMC(GNN):
@@ -43,14 +45,14 @@ class IGMC(GNN):
         self.ARR = ARR
         self.use_contrastive_loss = use_contrastive_loss
         self.temperature = temperature
-        self.map_edgetype2id = {v: i for i, v in enumerate(class_values)}
-
         self.multiply_by = multiply_by
+        self.map_edgetype2id = {v: i for i, v in enumerate(class_values)}
+        self.class_values = class_values
+
         self.convs = torch.nn.ModuleList()
         self.convs.append(gconv(dataset.num_features, latent_dim[0], num_relations, num_bases))
         for i in range(0, len(latent_dim) - 1):
             self.convs.append(gconv(latent_dim[i], latent_dim[i + 1], num_relations, num_bases))
-        # self.lin1 = Linear(2 * sum(latent_dim), 128)
         self.lin1 = Linear(128, 128)
         self.side_features = side_features
         if side_features:
@@ -59,7 +61,6 @@ class IGMC(GNN):
         self.max_neighbors = max_neighbors
         self.max_walks = max_walks
         self.naive_walking_lin1 = nn.Linear(128, self.max_neighbors)
-        self.naive_walking_lin2 = nn.Linear(128, 1)
         # self.edge_embd = nn.Linear(1, 128)
         # self.lin_embd = nn.Sequential(nn.Linear(256, 256), nn.Tanh())
         # self.lin_embd2 = nn.Linear(256, 128, bias=False)
@@ -285,7 +286,6 @@ class IGMC2(GNN):
         self.max_neighbors = max_neighbors
         self.max_walks = max_walks
         self.naive_walking_lin1 = nn.Linear(128, self.max_neighbors)
-        self.naive_walking_lin2 = nn.Linear(128, 1)
         # self.edge_embd = nn.Linear(1, 128)
         # self.lin_embd = nn.Sequential(nn.Linear(256, 256), nn.Tanh())
         # self.lin_embd2 = nn.Linear(256, 128, bias=False)
@@ -544,3 +544,67 @@ class IGMC2(GNN):
             print(f"below 0: {loss_mse} - {loss_arr} - {loss_contrastive}")
 
         return x[:, 0], loss
+
+
+###################################################################################
+
+
+class IGMCLitModel(LightningModule):
+    def __init__(self, model, hps):
+        super().__init__()
+
+        self._hparams = hps
+        self.model = model
+
+    def forward(self):
+        pass
+
+    def training_step(self, batch, batch_idx):
+        _, loss = self.model(batch)
+
+        self.log("train_loss", loss, on_step=True, on_epoch=True)
+
+        return loss
+
+    def test_step(self, batch, batch_idx):
+        pass
+
+    def validation_step(self, batch, batch_idx):
+        out, _ = self.model(batch)
+        mse = F.mse_loss(out, batch.y.view(-1), reduction="sum").item()
+
+        return mse, len(batch.y)
+
+    def validation_epoch_end(self, outputs) -> None:
+        mse, total = 0, 0
+        for output in outputs:
+            mse += output[0]
+            total += output[1]
+        mse_loss = mse / total
+        rmse = math.sqrt(mse_loss)
+
+        self.log("val_loss", rmse, on_epoch=True)
+
+        return rmse
+
+    def configure_optimizers(self):
+        optimizer = Adam(
+            self.model.parameters(),
+            lr=self._hparams["lr"],
+            weight_decay=self._hparams["weight_decay"],
+        )
+
+        optimizer = torch.optim.Adam(self.parameters(), lr=self._hparams["lr"])
+
+        scheduler = {
+            "scheduler": get_linear_schedule_with_warmup(
+                optimizer,
+                self._hparams["num_training_steps"] * 0.2,
+                self._hparams["num_training_steps"],
+                self._hparams["init_lr"],
+            ),
+            "interval": "step",  # or 'epoch'
+            "frequency": 1,
+        }
+
+        return [optimizer], [scheduler]

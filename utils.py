@@ -2,8 +2,6 @@ from all_packages import *
 from data_utils import *
 from preprocessing import *
 from train_eval import *
-from train_eval import get_linear_schedule_with_warmup
-from util_functions import *
 from utils_model.models import *
 
 
@@ -432,65 +430,48 @@ def get_model(args, hparams, train_dataset, u_features, v_features, class_values
     return model
 
 
-class IGMCLitModel(LightningModule):
-    def __init__(self, model, hps):
-        super().__init__()
+def get_trainer(args, hparams):
+    root_logging = "logs"
+    now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H-%M-%S")
+    name = f"{args.data_name}_{args.exp_name}_{now}"
+    path_dir_ckpt = osp.join(root_logging, "ckpts", name)
 
-        self._hparams = hps
-        self.model = model
+    callback_ckpt = ModelCheckpoint(
+        dirpath=path_dir_ckpt,
+        monitor="val_loss",
+        filename="{epoch}-{val_loss:.2f}",
+        mode="min",
+        save_top_k=3,
+    )
+    callback_tqdm = TQDMProgressBar(refresh_rate=5)
+    callback_lrmornitor = LearningRateMonitor(logging_interval="step")
+    logger_tboard = TensorBoardLogger(
+        root_logging,
+        name=name,
+        version=now,
+    )
+    logger_wandb = WandbLogger(name, root_logging)
 
-    def forward(self):
-        pass
+    trainer = Trainer(
+        gpus=args.gpus,
+        max_epochs=hparams["max_epochs"],
+        gradient_clip_val=hparams["gradient_clip_val"],
+        callbacks=[callback_ckpt, callback_tqdm, callback_lrmornitor],
+        logger=logger_wandb if args.use_wandb else logger_tboard,
+    )
 
-    def training_step(self, batch, batch_idx):
-        _, loss = self.model(batch)
+    return trainer, path_dir_ckpt
 
-        self.log("train_loss", loss, on_step=True, on_epoch=True)
 
-        return loss
+def get_loaders(train_graphs, test_graphs, hparams):
+    train_loader = DataLoader(
+        train_graphs, hparams["batch_size"], shuffle=True, num_workers=hparams["num_workers"]
+    )
+    val_loader = DataLoader(
+        test_graphs, hparams["batch_size"], shuffle=False, num_workers=hparams["num_workers"]
+    )
 
-    def test_step(self, batch, batch_idx):
-        pass
-
-    def validation_step(self, batch, batch_idx):
-        out, _ = self.model(batch)
-        mse = F.mse_loss(out, batch.y.view(-1), reduction="sum").item()
-
-        return mse, len(batch.y)
-
-    def validation_epoch_end(self, outputs) -> None:
-        mse, total = 0, 0
-        for output in outputs:
-            mse += output[0]
-            total += output[1]
-        mse_loss = mse / total
-        rmse = math.sqrt(mse_loss)
-
-        self.log("val_loss", rmse, on_epoch=True)
-
-        return rmse
-
-    def configure_optimizers(self):
-        optimizer = Adam(
-            self.model.parameters(),
-            lr=self._hparams["lr"],
-            weight_decay=self._hparams["weight_decay"],
-        )
-
-        optimizer = torch.optim.Adam(self.parameters(), lr=self._hparams["lr"])
-
-        scheduler = {
-            "scheduler": get_linear_schedule_with_warmup(
-                optimizer,
-                self._hparams["num_training_steps"] * 0.2,
-                self._hparams["num_training_steps"],
-                self._hparams["init_lr"],
-            ),
-            "interval": "step",  # or 'epoch'
-            "frequency": 1,
-        }
-
-        return [optimizer], [scheduler]
+    return train_loader, val_loader
 
 
 def final_test_model(path_dir_ckpt, model, trainer, val_loader):

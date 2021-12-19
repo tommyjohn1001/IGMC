@@ -34,7 +34,7 @@ class IGMC(GNN):
         max_walks=10,
         class_values=None,
         ARR=0.01,
-        use_contrastive_loss=True,
+        contrastive=True,
         temperature=0.1,
     ):
         super(IGMC, self).__init__(
@@ -43,7 +43,7 @@ class IGMC(GNN):
 
         self.batch_size = batch_size
         self.ARR = ARR
-        self.use_contrastive_loss = use_contrastive_loss
+        self.contrastive = contrastive
         self.temperature = temperature
         self.multiply_by = multiply_by
         self.map_edgetype2id = {v: i for i, v in enumerate(class_values)}
@@ -69,7 +69,7 @@ class IGMC(GNN):
         self.edge_embd = nn.Embedding(num_relations, 128)
         self.lin_embd = nn.LSTMCell(256, 128)
 
-        self.contrastive_criterion = CustomContrastiveLoss(self.temperature, num_relations)
+        # self.contrastive_criterion = CustomContrastiveLoss(self.temperature, num_relations)
 
     def naive_reasoning_walking(self, x, edge_index, edge_type, max_walks, start_node, end_node):
         # x: [n_nodes, 128]
@@ -221,14 +221,14 @@ class IGMC(GNN):
 
         ## Custom Contrastive loss
         loss_contrastive = 0
-        if self.use_contrastive_loss is True:
+        if self.contrastive > 0:
             edgetype_indx = [self.map_edgetype2id[int(edgetype.item())] for edgetype in data.y]
             edgetype_indx = torch.tensor(edgetype_indx, dtype=torch.int64, device=data.y.device)
             loss_contrastive = self.contrastive_criterion(
                 self.edge_embd.weight, x_128, edgetype_indx
             )
 
-        loss = loss_mse + self.ARR * loss_arr + 0.5 * loss_contrastive
+        loss = loss_mse + self.ARR * loss_arr + self.contrastive * loss_contrastive
         if torch.isnan(loss):
             print(f"NaN: {loss_mse} - {loss_arr} - {loss_contrastive}")
             exit(1)
@@ -259,7 +259,7 @@ class IGMC2(GNN):
         max_walks=10,
         class_values=None,
         ARR=0.01,
-        use_contrastive_loss=True,
+        contrastive=True,
         temperature=0.1,
     ):
         super(IGMC, self).__init__(
@@ -268,7 +268,7 @@ class IGMC2(GNN):
 
         self.batch_size = batch_size
         self.ARR = ARR
-        self.use_contrastive_loss = use_contrastive_loss
+        self.contrastive = contrastive
         self.temperature = temperature
         self.map_edgetype2id = {v: i for i, v in enumerate(class_values)}
 
@@ -529,7 +529,7 @@ class IGMC2(GNN):
                 loss_arr = reg_loss
 
         ## Custom Contrastive loss
-        if self.use_contrastive_loss is True:
+        if self.contrastive is True:
             edgetype_indx = [self.map_edgetype2id[int(edgetype.item())] for edgetype in data.y]
             edgetype_indx = torch.tensor(edgetype_indx, dtype=torch.int64, device=data.y.device)
             loss_contrastive = self.contrastive_criterion(
@@ -566,9 +566,6 @@ class IGMCLitModel(LightningModule):
 
         return loss
 
-    def test_step(self, batch, batch_idx):
-        pass
-
     def validation_step(self, batch, batch_idx):
         out, _ = self.model(batch)
         mse = F.mse_loss(out, batch.y.view(-1), reduction="sum").item()
@@ -587,6 +584,22 @@ class IGMCLitModel(LightningModule):
 
         return rmse
 
+    def predict_step(self, batch, batch_idx, dataloader_idx=0):
+
+        out, _ = self.model(batch)
+
+        return out, batch.y
+
+    def on_predict_epoch_end(self, results):
+        preds, trgs = [], []
+        aList = []
+        for output in results[0]:
+            preds.append(output[0])
+            trgs.append(output[1])
+
+        preds, trgs = torch.cat(preds), torch.cat(trgs)
+        return preds.cpu(), trgs.cpu()
+
     def configure_optimizers(self):
         optimizer = Adam(
             self.model.parameters(),
@@ -599,7 +612,7 @@ class IGMCLitModel(LightningModule):
         scheduler = {
             "scheduler": get_linear_schedule_with_warmup(
                 optimizer,
-                self._hparams["num_training_steps"] * 0.2,
+                self._hparams["num_training_steps"] * self._hparams["percent_warmup"],
                 self._hparams["num_training_steps"],
                 self._hparams["init_lr"],
             ),

@@ -326,7 +326,7 @@ if not args.keep_old and not args.transfer:
     # backup current main.py, model.py files
     copy("Main.py", args.res_dir)
     copy("util_functions.py", args.res_dir)
-    copy("models.py", args.res_dir)
+    copy("utils_model/models.py", args.res_dir)
     copy("train_eval.py", args.res_dir)
 # save command line input
 cmd_input = "python " + " ".join(sys.argv) + "\n"
@@ -580,6 +580,7 @@ else:
 
 if not args.no_train:
     train_multiple_epochs(
+        args,
         train_graphs,
         test_graphs,
         model,

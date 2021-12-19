@@ -285,7 +285,7 @@ def get_args():
         help="from which epoch's checkpoint to continue training",
     )
     parser.add_argument("--max_neighbors", type=int, default=50)
-    parser.add_argument("--max_walks", type=int, default=10)
+    parser.add_argument("--max_walks", type=int, default=21)
     parser.add_argument(
         "--lr", type=float, default=1e-3, metavar="LR", help="learning rate (default: 1e-3)"
     )
@@ -423,7 +423,7 @@ def get_model(args, hparams, train_dataset, u_features, v_features, class_values
         max_walks=args.max_walks,
         class_values=class_values,
         ARR=hparams["ARR"],
-        use_contrastive_loss=hparams["use_contrastive_loss"],
+        contrastive=hparams["contrastive"],
         temperature=hparams["temperature"],
     )
 
@@ -441,7 +441,7 @@ def get_trainer(args, hparams):
         monitor="val_loss",
         filename="{epoch}-{val_loss:.2f}",
         mode="min",
-        save_top_k=3,
+        save_top_k=5,
     )
     callback_tqdm = TQDMProgressBar(refresh_rate=5)
     callback_lrmornitor = LearningRateMonitor(logging_interval="step")
@@ -478,10 +478,26 @@ def final_test_model(path_dir_ckpt, model, trainer, val_loader):
     path_ckpts = glob(osp.join(path_dir_ckpt, "*.ckpt"))
     assert len(path_ckpts) > 0, "No ckpt found"
 
-    rmses = []
+    preds, trgs = 0, None
     for path_ckpt in path_ckpts:
-        rmse = trainer.validate(model, val_loader, path_ckpt)
-        rmses.append(rmse[0]["val_loss"])
-    rmse = sum(rmses) / len(rmses)
+        outputs = trainer.predict(
+            model,
+            val_loader,
+            return_predictions=True,
+            ckpt_path=path_ckpt,
+        )
+
+        list_preds, list_trgs = [], []
+        for output in outputs:
+            list_preds.append(output[0])
+            list_trgs.append(output[1])
+        preds = preds + torch.cat(list_preds)
+        if trgs is None:
+            trgs = torch.cat(list_trgs)
+
+    mean_preds = preds / len(path_ckpts)
+
+    mse = F.mse_loss(mean_preds, trgs.view(-1))
+    rmse = torch.sqrt(mse).item()
 
     logger.info(f"Final ensemble RMSE: {rmse:4f}")

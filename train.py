@@ -31,12 +31,11 @@ if __name__ == "__main__":
     train_loader, val_loader = get_loaders(train_graphs, test_graphs, hparams)
     model = get_model(args, hparams, train_graphs, u_features, v_features, class_values)
     trainer, path_dir_ckpt = get_trainer(args, hparams)
-    path_dir_ckpt = "logs/ckpts/yahoo_music_nrw0.1_Dec19_15-25-09"
     lit_model = IGMCLitModel(model, hparams)
 
-    # trainer.fit(
-    #     lit_model, train_dataloaders=train_loader, val_dataloaders=val_loader, ckpt_path=args.ckpt
-    # )
+    trainer.fit(
+        lit_model, train_dataloaders=train_loader, val_dataloaders=val_loader, ckpt_path=args.ckpt
+    )
 
     if args.ensemble:
         final_test_model(path_dir_ckpt, lit_model, trainer, val_loader)

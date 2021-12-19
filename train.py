@@ -6,6 +6,8 @@ dotenv.load_dotenv(override=True)
 if __name__ == "__main__":
     args = get_args()
 
+    logger.info(f"Command: {' '.join(sys.argv)}")
+
     hparams = {
         "batch_size": args.batch_size,
         "num_workers": 10,
@@ -17,7 +19,7 @@ if __name__ == "__main__":
         "weight_decay": 0,
         "percent_warmup": args.percent_warmup,
         "ARR": args.ARR,
-        "contrastive": 0,
+        "contrastive": args.contrastive,
         "temperature": 0.1,
     }
 

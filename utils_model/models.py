@@ -69,7 +69,7 @@ class IGMC(GNN):
         self.edge_embd = nn.Embedding(num_relations, 128)
         self.lin_embd = nn.LSTMCell(256, 128)
 
-        # self.contrastive_criterion = CustomContrastiveLoss(self.temperature, num_relations)
+        self.contrastive_criterion = CustomContrastiveLoss(self.temperature, num_relations)
 
     def naive_reasoning_walking(self, x, edge_index, edge_type, max_walks, start_node, end_node):
         # x: [n_nodes, 128]
@@ -262,7 +262,7 @@ class IGMC2(GNN):
         contrastive=True,
         temperature=0.1,
     ):
-        super(IGMC, self).__init__(
+        super(IGMC2, self).__init__(
             dataset, GCNConv, latent_dim, regression, adj_dropout, force_undirected
         )
 
@@ -529,14 +529,15 @@ class IGMC2(GNN):
                 loss_arr = reg_loss
 
         ## Custom Contrastive loss
-        if self.contrastive is True:
+        loss_contrastive = 0
+        if self.contrastive > 0:
             edgetype_indx = [self.map_edgetype2id[int(edgetype.item())] for edgetype in data.y]
             edgetype_indx = torch.tensor(edgetype_indx, dtype=torch.int64, device=data.y.device)
             loss_contrastive = self.contrastive_criterion(
                 self.edge_embd.weight, x_128, edgetype_indx
             )
 
-        loss = loss_mse + self.ARR * loss_arr + 0.5 * loss_contrastive
+        loss = loss_mse + self.ARR * loss_arr + self.contrastive * loss_contrastive
         if torch.isnan(loss):
             print(f"NaN: {loss_mse} - {loss_arr} - {loss_contrastive}")
             exit(1)

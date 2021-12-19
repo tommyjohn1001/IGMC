@@ -169,7 +169,31 @@ def get_args():
 
     parser.add_argument("--gpus", "-g", default="0")
     parser.add_argument("--ckpt", "-c", default=None)
-    parser.add_argument("--use_wandb", action="store_true")
+    parser.add_argument("--wandb", action="store_true")
+    parser.add_argument(
+        "--ARR",
+        type=float,
+        default=0.001,
+        help="The adjacenct rating regularizer. If not 0, regularize the \
+                        differences between graph convolution parameters W associated with\
+                        adjacent ratings",
+    )
+    parser.add_argument(
+        "--contrastive",
+        type=float,
+        default=0.1,
+        help="Contrastive loss. If not 0, use constrastive loss",
+    )
+    parser.add_argument(
+        "--version",
+        type=int,
+        default=1,
+        choices=[1, 2],
+        help="Switch between Naive Reasoning Walking ver 1 and 2",
+    )
+
+    ################################################################################################################
+
     parser.add_argument(
         "--testing",
         action="store_true",
@@ -304,14 +328,7 @@ def get_args():
     parser.add_argument(
         "--test-freq", type=int, default=1, metavar="N", help="test every n epochs"
     )
-    parser.add_argument(
-        "--ARR",
-        type=float,
-        default=0.001,
-        help="The adjacenct rating regularizer. If not 0, regularize the \
-                        differences between graph convolution parameters W associated with\
-                        adjacent ratings",
-    )
+
     # transfer learning, ensemble, and visualization settings
     parser.add_argument(
         "--transfer", default="", help="if not empty, load the pretrained models in this path"
@@ -407,7 +424,13 @@ def get_model(args, hparams, train_dataset, u_features, v_features, class_values
         num_relations = len(class_values)
         multiply_by = 1
 
-    model = IGMC(
+    if args.version == 1:
+        model = "IGMC"
+    elif args.version == 2:
+        model = "IGMC2"
+    else:
+        raise NotImplementedError()
+    model = eval(model)(
         train_dataset,
         latent_dim=[32, 32, 32, 32],
         num_relations=num_relations,
@@ -457,7 +480,7 @@ def get_trainer(args, hparams):
         max_epochs=hparams["max_epochs"],
         gradient_clip_val=hparams["gradient_clip_val"],
         callbacks=[callback_ckpt, callback_tqdm, callback_lrmornitor],
-        logger=logger_wandb if args.use_wandb else logger_tboard,
+        logger=logger_wandb if args.wandb else logger_tboard,
     )
 
     return trainer, path_dir_ckpt

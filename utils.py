@@ -467,6 +467,7 @@ def get_trainer(args, hparams):
         filename="{epoch}-{val_loss:.2f}",
         mode="min",
         save_top_k=5,
+        save_last=True,
     )
     callback_tqdm = TQDMProgressBar(refresh_rate=5)
     callback_lrmornitor = LearningRateMonitor(logging_interval="step")
@@ -481,6 +482,7 @@ def get_trainer(args, hparams):
         gpus=args.gpus,
         max_epochs=hparams["max_epochs"],
         gradient_clip_val=hparams["gradient_clip_val"],
+        # log_every_n_steps=5,
         callbacks=[callback_ckpt, callback_tqdm, callback_lrmornitor],
         logger=logger_wandb if args.wandb else logger_tboard,
     )

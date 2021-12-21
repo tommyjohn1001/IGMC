@@ -222,7 +222,7 @@ class IGMC(GNN):
         ## Custom Contrastive loss
         loss_contrastive = 0
         if self.contrastive > 0:
-            edgetype_indx = [self.map_edgetype2id[int(edgetype.item())] for edgetype in data.y]
+            edgetype_indx = [self.map_edgetype2id[edgetype.item()] for edgetype in data.y]
             edgetype_indx = torch.tensor(edgetype_indx, dtype=torch.int64, device=data.y.device)
             loss_contrastive = self.contrastive_criterion(
                 self.edge_embd.weight, x_128, edgetype_indx
@@ -531,7 +531,7 @@ class IGMC2(GNN):
         ## Custom Contrastive loss
         loss_contrastive = 0
         if self.contrastive > 0:
-            edgetype_indx = [self.map_edgetype2id[int(edgetype.item())] for edgetype in data.y]
+            edgetype_indx = [self.map_edgetype2id[edgetype.item()] for edgetype in data.y]
             edgetype_indx = torch.tensor(edgetype_indx, dtype=torch.int64, device=data.y.device)
             loss_contrastive = self.contrastive_criterion(
                 self.edge_embd.weight, x_128, edgetype_indx
@@ -611,17 +611,12 @@ class IGMCLitModel(LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self._hparams["lr"])
 
         scheduler = {
-            # "scheduler": get_linear_schedule_with_warmup(
-            #     optimizer,
-            #     self._hparams["num_training_steps"] * self._hparams["percent_warmup"],
-            #     self._hparams["num_training_steps"],
-            #     self._hparams["init_lr"],
-            # ),
             "scheduler": get_custom_lr_scheduler(
                 optimizer,
                 self._hparams["percent_warmup"],
                 self._hparams["percent_latter"],
                 self._hparams["num_training_steps"],
+                self._hparams["lr"],
                 self._hparams["init_lr"],
                 self._hparams["latter_lr"],
             ),

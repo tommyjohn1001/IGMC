@@ -1,10 +1,9 @@
 yahoo_music:
   hop: 3
-  epochs: 100
+  epochs: 350
   testing: True
   ensemble: True
-  # continue_from: 40
-  lr: 8e-3
+  lr: 9e-3
   batch_size: 64
   max_neighbors: 50
   max_walks: 10
@@ -13,10 +12,9 @@ yahoo_music:
 
 flixster:
   hop: 1
-  epochs: 100
+  epochs: 350
   testing: True
   ensemble: True
-  # continue_from: 40
   lr: 8e-3
   batch_size: 64
   max_neighbors: 50
@@ -26,10 +24,9 @@ flixster:
 
 douban:
   hop: 1
-  epochs: 100
+  epochs: 350
   testing: True
   ensemble: True
-  # continue_from: 40
   lr: 8e-3
   batch_size: 128
   max_neighbors: 50
@@ -42,7 +39,7 @@ ml_1m:
   data_appendix: _mnph100
   max_nodes_per_hop: 100
   testing: True
-  epochs: 100
+  epochs: 350
   save_interval: 5
   lr_decay_step_size: 20
   lr: 8e-3
@@ -59,7 +56,7 @@ ml_100k:
   data_appendix: _mnph100
   max_nodes_per_hop: 200
   testing: True
-  epochs: 100
+  epochs: 350
   save_interval: 5
   lr_decay_step_size: 20
   lr: 8e-3

@@ -10,7 +10,7 @@ from util_functions import *
 
 from utils_model.layers import *
 from utils_model.losses import *
-from utils_model.utils import Queue
+from utils_model.utils import *
 
 
 class IGMC(GNN):
@@ -611,11 +611,19 @@ class IGMCLitModel(LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self._hparams["lr"])
 
         scheduler = {
-            "scheduler": get_linear_schedule_with_warmup(
+            # "scheduler": get_linear_schedule_with_warmup(
+            #     optimizer,
+            #     self._hparams["num_training_steps"] * self._hparams["percent_warmup"],
+            #     self._hparams["num_training_steps"],
+            #     self._hparams["init_lr"],
+            # ),
+            "scheduler": get_custom_lr_scheduler(
                 optimizer,
-                self._hparams["num_training_steps"] * self._hparams["percent_warmup"],
+                self._hparams["percent_warmup"],
+                self._hparams["percent_latter"],
                 self._hparams["num_training_steps"],
                 self._hparams["init_lr"],
+                self._hparams["latter_lr"],
             ),
             "interval": "step",  # or 'epoch'
             "frequency": 1,

@@ -170,6 +170,10 @@ def get_args():
     parser.add_argument("--gpus", "-g", default="0")
     parser.add_argument("--ckpt", "-c", default=None)
     parser.add_argument("--wandb", action="store_true")
+    parser.add_argument("--percent_warmup", type=float, default=0.15)
+    parser.add_argument("--percent_latter", type=float, default=0.25)
+    parser.add_argument("--init_lr", type=float, default=5e-4)
+    parser.add_argument("--latter_lr", type=float, default=3e-4)
     parser.add_argument(
         "--ARR",
         type=float,
@@ -275,8 +279,6 @@ def get_args():
         help="if < 1, subsample nodes per hop according to the ratio",
     )
 
-    parser.add_argument("--percent_warmup", type=float, default=0.15)
-    parser.add_argument("--init_lr", type=float, default=5e-4)
     parser.add_argument(
         "--max-nodes-per-hop",
         default=10000,

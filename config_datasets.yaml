@@ -1,6 +1,6 @@
 yahoo_music:
   hop: 3
-  epochs: 350
+  epochs: 250
   testing: True
   ensemble: True
   lr: 9e-3
@@ -8,11 +8,13 @@ yahoo_music:
   max_neighbors: 50
   max_walks: 10
   percent_warmup: 0.2
+  percent_latter: 0.25
   init_lr: 5e-4
+  latter_lr: 3e-4
 
 flixster:
   hop: 1
-  epochs: 350
+  epochs: 250
   testing: True
   ensemble: True
   lr: 8e-3
@@ -20,11 +22,13 @@ flixster:
   max_neighbors: 50
   max_walks: 10
   percent_warmup: 0.2
+  percent_latter: 0.25
   init_lr: 5e-4
+  latter_lr: 3e-4
 
 douban:
   hop: 1
-  epochs: 350
+  epochs: 250
   testing: True
   ensemble: True
   lr: 8e-3
@@ -32,14 +36,16 @@ douban:
   max_neighbors: 50
   max_walks: 10
   percent_warmup: 0.2
+  percent_latter: 0.25
   init_lr: 5e-4
+  latter_lr: 3e-4
 
 ml_1m:
   save_appendix: _mnhp100
   data_appendix: _mnph100
   max_nodes_per_hop: 100
   testing: True
-  epochs: 350
+  epochs: 250
   save_interval: 5
   lr_decay_step_size: 20
   lr: 8e-3
@@ -49,14 +55,16 @@ ml_1m:
   max_neighbors: 50
   max_walks: 10
   percent_warmup: 0.2
+  percent_latter: 0.25
   init_lr: 5e-4
+  latter_lr: 3e-4
 
 ml_100k:
   save_appendix: _mnph200
   data_appendix: _mnph100
   max_nodes_per_hop: 200
   testing: True
-  epochs: 350
+  epochs: 250
   save_interval: 5
   lr_decay_step_size: 20
   lr: 8e-3
@@ -66,4 +74,6 @@ ml_100k:
   max_neighbors: 50
   max_walks: 10
   percent_warmup: 0.2
+  percent_latter: 0.25
   init_lr: 5e-4
+  latter_lr: 3e-4

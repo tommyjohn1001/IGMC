@@ -21,35 +21,42 @@ class Queue:
 
 def get_custom_lr_scheduler(
     optimizer,
-    percent_warmup,
-    percent_latter,
-    num_training_steps,
-    lr=8e-3,
-    init_lr=5e-4,
-    latter_lr=3e-4,
+    hparams,
     last_epoch=-1,
 ):
-    num_warmup_steps = int(percent_warmup * num_training_steps)
-    num_latter_steps = int((1 - percent_latter) * num_training_steps)
 
-    def lr_lambda(current_step: int):
+    # 0 -> 15: warmup with init = 5e-5, peak = 3e-3
+    # 15 -> 100: decrease linearly from 1e-3 to 3e-4
+    # 100 -> 175: stable at 3e-4
+    # 175 -> 250: stable at 7e-5
+    init_lr = 5e-5
+    peak_lr = hparams["lr"]
+    lr_100 = 3e-4
+    lr_175 = 7e-5
+    epochs_warmup = 20
+    epochs_peak = 100
+    epochs_100 = 175
+    epochs_175 = hparams["max_epochs"]
 
-        if current_step < num_warmup_steps:
-            output_lr = float(current_step) / float(max(1, num_warmup_steps)) * lr + init_lr
-        elif current_step > num_latter_steps:
-            output_lr = latter_lr
-        else:
+    def lr_lambda(current_epoch: int):
+        if current_epoch < epochs_warmup:
+            output_lr = float(current_epoch) / float(max(1, epochs_warmup)) * peak_lr + init_lr
+        elif current_epoch < epochs_peak:
             output_lr = (
                 max(
-                    0.0,
-                    float(num_training_steps - current_step)
-                    / float(max(1, num_training_steps - num_warmup_steps)),
+                    lr_100,
+                    float(epochs_peak - current_epoch)
+                    / float(max(1, epochs_peak - epochs_warmup)),
                 )
-                * lr
+                * peak_lr
             )
+        elif current_epoch < epochs_100:
+            output_lr = lr_100
+        else:
+            output_lr = lr_175
 
         ## Vì mục tiêu của lr scheduler là tạo ra hệ số để sau đó nhân với hparams['lr']
-        output_lr = output_lr / lr
+        output_lr = output_lr / peak_lr
 
         return output_lr
 

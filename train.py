@@ -13,22 +13,15 @@ if __name__ == "__main__":
         "num_workers": 10,
         "lr": args.lr,
         "max_epochs": args.epochs,
-        "init_lr": args.init_lr,
-        "latter_lr": args.latter_lr,
         "gradient_clip_val": 0,
         "regression": True,
         "weight_decay": 0,
-        "percent_warmup": args.percent_warmup,
-        "percent_latter": args.percent_latter,
         "ARR": args.ARR,
         "contrastive": args.contrastive,
         "temperature": 0.1,
     }
 
     train_graphs, test_graphs, u_features, v_features, class_values = get_train_val_datasets(args)
-    hparams["num_training_steps"] = int(
-        len(train_graphs) * hparams["max_epochs"] / args.batch_size
-    )
     print("All ratings are:")
     print(class_values)
 
@@ -41,5 +34,5 @@ if __name__ == "__main__":
         lit_model, train_dataloaders=train_loader, val_dataloaders=val_loader, ckpt_path=args.ckpt
     )
 
-    if args.ensemble:
+    if args.ensemble is True:
         final_test_model(path_dir_ckpt, lit_model, trainer, val_loader)

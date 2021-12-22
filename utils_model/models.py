@@ -611,16 +611,8 @@ class IGMCLitModel(LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self._hparams["lr"])
 
         scheduler = {
-            "scheduler": get_custom_lr_scheduler(
-                optimizer,
-                self._hparams["percent_warmup"],
-                self._hparams["percent_latter"],
-                self._hparams["num_training_steps"],
-                self._hparams["lr"],
-                self._hparams["init_lr"],
-                self._hparams["latter_lr"],
-            ),
-            "interval": "step",  # or 'epoch'
+            "scheduler": get_custom_lr_scheduler(optimizer, self._hparams),
+            "interval": "epoch",  # or 'epoch'
             "frequency": 1,
         }
 

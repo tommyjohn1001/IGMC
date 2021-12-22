@@ -3,42 +3,30 @@ yahoo_music:
   epochs: 250
   testing: True
   ensemble: True
-  lr: 9e-3
+  lr: 3e-3
   batch_size: 64
   max_neighbors: 50
   max_walks: 10
-  percent_warmup: 0.2
-  percent_latter: 0.25
-  init_lr: 5e-4
-  latter_lr: 3e-4
 
 flixster:
   hop: 1
   epochs: 250
   testing: True
   ensemble: True
-  lr: 8e-3
+  lr: 3e-3
   batch_size: 64
   max_neighbors: 50
   max_walks: 10
-  percent_warmup: 0.2
-  percent_latter: 0.25
-  init_lr: 5e-4
-  latter_lr: 3e-4
 
 douban:
   hop: 1
   epochs: 250
   testing: True
   ensemble: True
-  lr: 8e-3
+  lr: 3e-3
   batch_size: 128
   max_neighbors: 50
   max_walks: 10
-  percent_warmup: 0.2
-  percent_latter: 0.25
-  init_lr: 5e-4
-  latter_lr: 3e-4
 
 ml_1m:
   save_appendix: _mnhp100
@@ -48,16 +36,12 @@ ml_1m:
   epochs: 250
   save_interval: 5
   lr_decay_step_size: 20
-  lr: 8e-3
+  lr: 3e-3
   batch_size: 64
   ensemble: True
   dynamic_train: True
   max_neighbors: 50
   max_walks: 10
-  percent_warmup: 0.2
-  percent_latter: 0.25
-  init_lr: 5e-4
-  latter_lr: 3e-4
 
 ml_100k:
   save_appendix: _mnph200
@@ -67,13 +51,9 @@ ml_100k:
   epochs: 250
   save_interval: 5
   lr_decay_step_size: 20
-  lr: 8e-3
+  lr: 3e-3
   batch_size: 64
   ensemble: True
   dynamic_train: True
   max_neighbors: 50
   max_walks: 10
-  percent_warmup: 0.2
-  percent_latter: 0.25
-  init_lr: 5e-4
-  latter_lr: 3e-4

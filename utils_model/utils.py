@@ -1,3 +1,4 @@
+import numpy as np
 from torch.optim.lr_scheduler import LambdaLR
 
 
@@ -38,13 +39,30 @@ def get_custom_lr_scheduler(
     epochs_100 = 175
     epochs_175 = hparams["max_epochs"]
 
+    def get_lr(range_epochs, lrs, currect_epoch):
+        assert len(range_epochs) == 2
+        assert len(lrs) == 2
+
+        if lrs[0] == lrs[1]:
+            return lrs[0]
+
+        A = np.array([[range_epochs[0], 1], [range_epochs[1], 1]])
+        B = np.array([[lrs[0]], [lrs[1]]])
+        X = np.dot(np.linalg.inv(A), B)
+
+        currect_epoch = np.array([currect_epoch, 1])
+
+        final_lr = np.dot(currect_epoch, X).item()
+
+        return final_lr
+
     def lr_lambda(current_epoch: int):
         if current_epoch < epochs_warmup:
             output_lr = float(current_epoch) / float(max(1, epochs_warmup)) * peak_lr + init_lr
         elif current_epoch < epochs_peak:
             output_lr = (
                 max(
-                    lr_100,
+                    0,
                     float(epochs_peak - current_epoch)
                     / float(max(1, epochs_peak - epochs_warmup)),
                 )
@@ -54,6 +72,8 @@ def get_custom_lr_scheduler(
             output_lr = lr_100
         else:
             output_lr = lr_175
+        # else:
+        #     output_lr = get_lr((epochs_peak, epochs_175), (9e-4, 5e-5), current_epoch)
 
         ## Vì mục tiêu của lr scheduler là tạo ra hệ số để sau đó nhân với hparams['lr']
         output_lr = output_lr / peak_lr

@@ -25,20 +25,6 @@ def get_custom_lr_scheduler(
     hparams,
     last_epoch=-1,
 ):
-
-    # 0 -> 15: warmup with init = 5e-5, peak = 3e-3
-    # 15 -> 100: decrease linearly from 1e-3 to 3e-4
-    # 100 -> 175: stable at 3e-4
-    # 175 -> 250: stable at 7e-5
-    init_lr = 5e-5
-    peak_lr = hparams["lr"]
-    lr_100 = 3e-4
-    lr_175 = 7e-5
-    epochs_warmup = 20
-    epochs_peak = 100
-    epochs_100 = 175
-    epochs_175 = hparams["max_epochs"]
-
     def get_lr(range_epochs, lrs, currect_epoch):
         assert len(range_epochs) == 2
         assert len(lrs) == 2
@@ -57,26 +43,15 @@ def get_custom_lr_scheduler(
         return final_lr
 
     def lr_lambda(current_epoch: int):
-        if current_epoch < epochs_warmup:
-            output_lr = float(current_epoch) / float(max(1, epochs_warmup)) * peak_lr + init_lr
-        elif current_epoch < epochs_peak:
-            output_lr = (
-                max(
-                    0,
-                    float(epochs_peak - current_epoch)
-                    / float(max(1, epochs_peak - epochs_warmup)),
-                )
-                * peak_lr
-            )
-        elif current_epoch < epochs_100:
-            output_lr = lr_100
+        if current_epoch < 135:
+            output_lr = hparams["lr"]
+        elif current_epoch < 165:
+            output_lr = hparams["lr"] / 2
         else:
-            output_lr = lr_175
-        # else:
-        #     output_lr = get_lr((epochs_peak, epochs_175), (9e-4, 5e-5), current_epoch)
+            output_lr = hparams["lr"] / 5
 
         ## Vì mục tiêu của lr scheduler là tạo ra hệ số để sau đó nhân với hparams['lr']
-        output_lr = output_lr / peak_lr
+        output_lr = output_lr / hparams["lr"]
 
         return output_lr
 

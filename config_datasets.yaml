@@ -3,7 +3,7 @@ yahoo_music:
   epochs: 200
   testing: True
   ensemble: True
-  lr: 3e-3
+  lr: 1e-3
   batch_size: 64
   max_neighbors: 50
   max_walks: 10
@@ -13,7 +13,7 @@ flixster:
   epochs: 200
   testing: True
   ensemble: True
-  lr: 3e-3
+  lr: 1e-3
   batch_size: 64
   max_neighbors: 50
   max_walks: 10
@@ -23,7 +23,7 @@ douban:
   epochs: 200
   testing: True
   ensemble: True
-  lr: 3e-3
+  lr: 1e-3
   batch_size: 128
   max_neighbors: 50
   max_walks: 10
@@ -36,7 +36,7 @@ ml_1m:
   epochs: 200
   save_interval: 5
   lr_decay_step_size: 20
-  lr: 3e-3
+  lr: 1e-3
   batch_size: 64
   ensemble: True
   dynamic_train: True
@@ -51,7 +51,7 @@ ml_100k:
   epochs: 200
   save_interval: 5
   lr_decay_step_size: 20
-  lr: 3e-3
+  lr: 1e-3
   batch_size: 64
   ensemble: True
   dynamic_train: True

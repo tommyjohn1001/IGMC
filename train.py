@@ -4,9 +4,10 @@ from utils import *
 dotenv.load_dotenv(override=True)
 
 if __name__ == "__main__":
-    args = get_args()
+    args, config_dataset = get_args()
 
     logger.info(f"Command: {' '.join(sys.argv)}")
+    print(json.dumps(config_dataset, indent=2, ensure_ascii=False))
 
     hparams = {
         "batch_size": args.batch_size,
@@ -19,6 +20,7 @@ if __name__ == "__main__":
         "ARR": args.ARR,
         "contrastive": args.contrastive,
         "temperature": 0.1,
+        "lr_scheduler": config_dataset["lr_scheduler"],
     }
 
     train_graphs, test_graphs, u_features, v_features, class_values = get_train_val_datasets(args)

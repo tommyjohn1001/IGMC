@@ -1,59 +1,87 @@
 yahoo_music:
   hop: 3
-  epochs: 200
+  epochs: 250
   testing: True
   ensemble: True
-  lr: 3e-3
-  batch_size: 64
-  max_neighbors: 50
-  max_walks: 10
-
-flixster:
-  hop: 1
-  epochs: 200
-  testing: True
-  ensemble: True
-  lr: 3e-3
-  batch_size: 64
-  max_neighbors: 50
-  max_walks: 10
-
-douban:
-  hop: 1
-  epochs: 200
-  testing: True
-  ensemble: True
-  lr: 3e-3
   batch_size: 128
   max_neighbors: 50
   max_walks: 10
+  lr_scheduler:
+    - range_epoch: 0,200
+      range_lr: 1e-3,1e-3
+    - range_epoch: 200,225
+      range_lr: 1e-3,9e-4
+    - range_epoch: 225,250
+      range_lr: 9e-4,8e-4
+
+flixster:
+  hop: 1
+  epochs: 250
+  testing: True
+  ensemble: True
+  batch_size: 128
+  max_neighbors: 50
+  max_walks: 10
+  lr_scheduler:
+    - range_epoch: 0,200
+      range_lr: 1e-3,1e-3
+    - range_epoch: 200,225
+      range_lr: 1e-3,9e-4
+    - range_epoch: 225,250
+      range_lr: 9e-4,8e-4
+
+douban:
+  hop: 1
+  epochs: 250
+  testing: True
+  ensemble: True
+  batch_size: 128
+  max_neighbors: 50
+  max_walks: 10
+  lr_scheduler:
+    - range_epoch: 0,120
+      range_lr: 1e-3,1e-3
+    - range_epoch: 120,200
+      range_lr: 1e-3,8.5e-4
+    - range_epoch: 200,225
+      range_lr: 8.5e-4,7e-4
+    - range_epoch: 225,250
+      range_lr: 7e-4,5e-4
 
 ml_1m:
   save_appendix: _mnhp100
   data_appendix: _mnph100
   max_nodes_per_hop: 100
   testing: True
-  epochs: 200
-  save_interval: 5
-  lr_decay_step_size: 20
-  lr: 3e-3
-  batch_size: 64
+  epochs: 250
+  batch_size: 128
   ensemble: True
   dynamic_train: True
   max_neighbors: 50
   max_walks: 10
+  lr_scheduler:
+    - range_epoch: 0,200
+      range_lr: 1e-3,1e-3
+    - range_epoch: 200,225
+      range_lr: 1e-3,9e-4
+    - range_epoch: 225,250
+      range_lr: 9e-4,8e-4
 
 ml_100k:
   save_appendix: _mnph200
   data_appendix: _mnph100
   max_nodes_per_hop: 200
   testing: True
-  epochs: 200
-  save_interval: 5
-  lr_decay_step_size: 20
-  lr: 3e-3
-  batch_size: 64
+  epochs: 250
+  batch_size: 128
   ensemble: True
   dynamic_train: True
   max_neighbors: 50
   max_walks: 10
+  lr_scheduler:
+    - range_epoch: 0,200
+      range_lr: 1e-3,1e-3
+    - range_epoch: 200,225
+      range_lr: 1e-3,9e-4
+    - range_epoch: 225,250
+      range_lr: 9e-4,8e-4

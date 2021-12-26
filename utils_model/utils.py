@@ -25,15 +25,15 @@ def get_custom_lr_scheduler(
     hparams,
     last_epoch=-1,
 ):
-    def get_lr(range_epochs, lrs, currect_epoch):
-        assert len(range_epochs) == 2
-        assert len(lrs) == 2
+    def get_lr(range_epoch, range_lr, currect_epoch):
+        assert len(range_epoch) == 2
+        assert len(range_lr) == 2
 
-        if lrs[0] == lrs[1]:
-            return lrs[0]
+        if range_lr[0] == range_lr[1]:
+            return range_lr[0]
 
-        A = np.array([[range_epochs[0], 1], [range_epochs[1], 1]])
-        B = np.array([[lrs[0]], [lrs[1]]])
+        A = np.array([[range_epoch[0], 1], [range_epoch[1], 1]])
+        B = np.array([[range_lr[0]], [range_lr[1]]])
         X = np.dot(np.linalg.inv(A), B)
 
         currect_epoch = np.array([currect_epoch, 1])
@@ -43,16 +43,15 @@ def get_custom_lr_scheduler(
         return final_lr
 
     def lr_lambda(current_epoch: int):
-        if current_epoch < 135:
-            output_lr = hparams["lr"]
-        elif current_epoch < 165:
-            output_lr = hparams["lr"] / 2
-        else:
-            output_lr = hparams["lr"] / 5
+        for sched in hparams["lr_scheduler"]:
+            range_epoch = sched["range_epoch"]
+            range_lr = sched["range_lr"]
 
-        ## Vì mục tiêu của lr scheduler là tạo ra hệ số để sau đó nhân với hparams['lr']
-        output_lr = output_lr / hparams["lr"]
+            if range_epoch[0] <= current_epoch < range_epoch[1]:
+                output_lr = get_lr(range_epoch, range_lr, current_epoch)
 
-        return output_lr
+                return output_lr
+
+        return 1e-3
 
     return LambdaLR(optimizer, lr_lambda, last_epoch)

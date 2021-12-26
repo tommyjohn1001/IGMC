@@ -309,7 +309,7 @@ def get_args():
     parser.add_argument("--max_neighbors", type=int, default=50)
     parser.add_argument("--max_walks", type=int, default=21)
     parser.add_argument(
-        "--lr", type=float, default=1e-3, metavar="LR", help="learning rate (default: 1e-3)"
+        "--lr", type=float, default=1, metavar="LR", help="learning rate (default: 1)"
     )
     parser.add_argument(
         "--lr-decay-step-size", type=int, default=50, help="decay lr by factor A every B steps"
@@ -399,7 +399,7 @@ def get_args():
 
     args.gpus = [int(x) for x in args.gpus.split(",")]
 
-    return args
+    return args, config_dataset
 
 
 def get_model(args, hparams, train_dataset, u_features, v_features, class_values):

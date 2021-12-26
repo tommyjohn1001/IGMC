@@ -392,10 +392,15 @@ def get_args():
 
     config_dataset = config_dataset[args.data_name]
     for k, v in config_dataset.items():
-        if "lr" in k:
-            setattr(args, k, float(v))
-        else:
-            setattr(args, k, v)
+        if k == "lr_scheduler":
+            for sched in v:
+                range_epoch = sched["range_epoch"]
+                range_lr = sched["range_lr"]
+
+                sched["range_epoch"] = list(map(int, range_epoch.split(",")))
+                sched["range_lr"] = list(map(float, range_lr.split(",")))
+
+        setattr(args, k, v)
 
     args.gpus = [int(x) for x in args.gpus.split(",")]
 

@@ -32,6 +32,8 @@ if __name__ == "__main__":
     trainer, path_dir_ckpt = get_trainer(args, hparams)
     lit_model = IGMCLitModel(model, hparams)
 
+    trainer.logger.log_hyperparams(hparams)
+
     trainer.fit(
         lit_model, train_dataloaders=train_loader, val_dataloaders=val_loader, ckpt_path=args.ckpt
     )

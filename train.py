@@ -34,9 +34,15 @@ if __name__ == "__main__":
 
     trainer.logger.log_hyperparams(hparams)
 
-    trainer.fit(
-        lit_model, train_dataloaders=train_loader, val_dataloaders=val_loader, ckpt_path=args.ckpt
-    )
+    if not args.testing:
+        trainer.fit(
+            lit_model,
+            train_dataloaders=train_loader,
+            val_dataloaders=val_loader,
+            ckpt_path=args.ckpt,
+        )
+    else:
+        path_dir_ckpt = args.ckpt
 
     if args.ensemble is True:
         final_test_model(path_dir_ckpt, lit_model, trainer, val_loader)

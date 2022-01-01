@@ -34,7 +34,7 @@ if __name__ == "__main__":
 
     trainer.logger.log_hyperparams(hparams)
 
-    if not args.testing:
+    if not args.predict:
         trainer.fit(
             lit_model,
             train_dataloaders=train_loader,

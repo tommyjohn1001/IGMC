@@ -170,7 +170,8 @@ def get_args():
     parser.add_argument("--gpus", "-g", default="0")
     parser.add_argument("--ckpt", "-c", default=None)
     parser.add_argument("--wandb", action="store_true")
-    parser.add_argument("--testing", action="store_true")
+    parser.add_argument("--predict", action="store_true")
+    parser.add_argument("--superpod", action="store_true")
     parser.add_argument(
         "--ARR",
         type=float,
@@ -459,7 +460,10 @@ def get_model(args, hparams, train_dataset, u_features, v_features, class_values
 
 def get_trainer(args, hparams):
     root_logging = "logs"
-    now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H-%M-%S")
+    if args.superpod:
+        now = datetime.now().strftime("%b%d_%H-%M-%S")
+    else:
+        now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H-%M-%S")
     name = f"{args.data_name}_{args.exp_name}_{now}"
     path_dir_ckpt = osp.join(root_logging, "ckpts", name)
 

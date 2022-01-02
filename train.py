@@ -29,13 +29,13 @@ if __name__ == "__main__":
 
     train_loader, val_loader = get_loaders(train_graphs, test_graphs, hparams)
     model = get_model(args, hparams, train_graphs, u_features, v_features, class_values)
-    trainer, path_dir_ckpt = get_trainer(args, hparams)
+    trainer_train, trainer_eval, path_dir_ckpt = get_trainer(args, hparams)
     lit_model = IGMCLitModel(model, hparams)
 
-    trainer.logger.log_hyperparams(hparams)
+    trainer_train.logger.log_hyperparams(hparams)
 
     if not args.predict:
-        trainer.fit(
+        trainer_train.fit(
             lit_model,
             train_dataloaders=train_loader,
             val_dataloaders=val_loader,
@@ -44,4 +44,6 @@ if __name__ == "__main__":
     else:
         path_dir_ckpt = args.ckpt
 
-    final_test_model(path_dir_ckpt, lit_model, trainer, val_loader)
+    logger.info("Start predicting...")
+
+    final_test_model(path_dir_ckpt, lit_model, trainer_eval, val_loader)

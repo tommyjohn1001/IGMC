@@ -470,7 +470,7 @@ def get_trainer(args, hparams):
     callback_ckpt = ModelCheckpoint(
         dirpath=path_dir_ckpt,
         monitor="val_loss",
-        filename="{epoch}-{val_loss:.2f}",
+        filename="{epoch}-{val_loss:.3f}",
         mode="min",
         save_top_k=5,
         save_last=True,
@@ -484,7 +484,7 @@ def get_trainer(args, hparams):
     )
     logger_wandb = WandbLogger(name, root_logging)
 
-    trainer = Trainer(
+    trainer_train = Trainer(
         gpus=args.gpus,
         max_epochs=hparams["max_epochs"],
         gradient_clip_val=hparams["gradient_clip_val"],
@@ -494,7 +494,9 @@ def get_trainer(args, hparams):
         logger=logger_wandb if args.wandb else logger_tboard,
     )
 
-    return trainer, path_dir_ckpt
+    trainer_eval = Trainer(gpus=args.gpus[0], logger=logger_wandb if args.wandb else logger_tboard)
+
+    return trainer_train, trainer_eval, path_dir_ckpt
 
 
 def get_loaders(train_graphs, test_graphs, hparams):

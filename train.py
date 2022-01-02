@@ -44,5 +44,4 @@ if __name__ == "__main__":
     else:
         path_dir_ckpt = args.ckpt
 
-    if args.ensemble is True:
-        final_test_model(path_dir_ckpt, lit_model, trainer, val_loader)
+    final_test_model(path_dir_ckpt, lit_model, trainer, val_loader)

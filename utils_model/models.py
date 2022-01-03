@@ -76,6 +76,7 @@ class IGMC(GNN):
         # edge_index: [2: n_edges]
 
         ## Do something to get start and end nodes
+        bz = x.shape[0]
 
         ## start looping
 
@@ -83,6 +84,7 @@ class IGMC(GNN):
         node = start_node
         traversed_node = set([node.item()])
         accumulated = x[node]
+        accumulated_nodes = []
         is_reaching_target = False
         h, c = 0, 0
         while not is_reaching_target and n_walks < max_walks:
@@ -124,6 +126,8 @@ class IGMC(GNN):
 
             ## dùng cơ chế cộng để accumulate hoặc áp dụng memorynet
             total = torch.cat((selected_node_embd, selected_edge_embd), -1)
+            # accumulated_nodes.append(total.unsqueeze(1))
+
             # [b, 256]
             if not torch.is_tensor(h):
                 h, c = self.lin_embd(total)
@@ -140,7 +144,21 @@ class IGMC(GNN):
 
             n_walks += 1
 
-        return accumulated / len(traversed_node)
+        # accumulated_nodes = torch.cat(accumulated_nodes, 1)
+        # # [bz, n, 256]
+        # pad_zeros = torch.zeros(
+        #     (bz, max_walks - accumulated_nodes.shape[1], 256),
+        #     dtype=accumulated_nodes.dtype,
+        #     device=accumulated_nodes.device,
+        # )
+        # accumulated_nodes = torch.cat((accumulated_nodes, pad_zeros))
+        # # [bz, max_walks, 256]
+
+        # This ensures end_node is always appened into accumulated
+        if len(neighbors) != 0 and is_reaching_target:
+            accumulated += x[end_node]
+
+        return accumulated
 
     def forward(self, data):
         x, edge_index, edge_type, batch = data.x, data.edge_index, data.edge_type, data.batch

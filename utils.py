@@ -464,7 +464,15 @@ def get_trainer(args, hparams):
         now = datetime.now().strftime("%b%d_%H-%M-%S")
     else:
         now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H-%M-%S")
-    name = f"{args.data_name}_{args.exp_name}_{now}"
+
+    additional_info = []
+    if args.superpod:
+        additional_info.append("superpod")
+    if len(args.gpus) > 1:
+        additional_info.append("multi")
+    additional_info = f"{'_'.join(additional_info)}_" if len(additional_info) > 0 else ""
+    name = f"{args.data_name}_{args.exp_name}_{additional_info}{now}"
+
     path_dir_ckpt = osp.join(root_logging, "ckpts", name)
 
     callback_ckpt = ModelCheckpoint(
@@ -472,7 +480,7 @@ def get_trainer(args, hparams):
         monitor="val_loss",
         filename="{epoch}-{val_loss:.3f}",
         mode="min",
-        save_top_k=5,
+        save_top_k=2,
         save_last=True,
     )
     callback_tqdm = TQDMProgressBar(refresh_rate=5)
@@ -494,7 +502,9 @@ def get_trainer(args, hparams):
         logger=logger_wandb if args.wandb else logger_tboard,
     )
 
-    trainer_eval = Trainer(gpus=args.gpus[0], logger=logger_wandb if args.wandb else logger_tboard)
+    trainer_eval = Trainer(
+        gpus=[args.gpus[0]], strategy=None, logger=logger_wandb if args.wandb else logger_tboard
+    )
 
     return trainer_train, trainer_eval, path_dir_ckpt
 

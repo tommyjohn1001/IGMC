@@ -155,10 +155,13 @@ class IGMC(GNN):
         # # [bz, max_walks, 256]
 
         # This ensures end_node is always appened into accumulated
+        n_traversed_nodes = len(traversed_node)
+
         if len(neighbors) != 0 and is_reaching_target:
             accumulated += x[end_node]
+            n_traversed_nodes += 1
 
-        return accumulated
+        return accumulated / n_traversed_nodes
 
     def forward(self, data):
         x, edge_index, edge_type, batch = data.x, data.edge_index, data.edge_type, data.batch
@@ -465,6 +468,10 @@ class IGMC2(GNN):
                 is_reaching_target = True
 
                 longest_walk = {"n_walks": n_walks + 1, "accumulated": accumulated}
+
+        if not is_reaching_target:
+            longest_walk["accumulated"] += x[end_node]
+            longest_walk["n_walks"] += 1
 
         return longest_walk["accumulated"] / longest_walk["n_walks"]
 

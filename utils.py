@@ -466,6 +466,7 @@ def get_trainer(args, hparams):
         now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H-%M-%S")
 
     additional_info = []
+    additional_info.append(str(args.version))
     if args.superpod:
         additional_info.append("superpod")
     if len(args.gpus) > 1:

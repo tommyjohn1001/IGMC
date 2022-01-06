@@ -7,14 +7,20 @@
 # CUDA=cu110
 # pip install torch-scatter -f https://data.pyg.org/whl/torch-${TORCH}+${CUDA}.html
 # pip install torch-sparse -f https://data.pyg.org/whl/torch-${TORCH}+${CUDA}.html
-# pip install torch-geometric
+# pip install -U torch-geometric==1.5.5
 
-# pip install loguru black isort jupyterlab
+# pip install loguru black isort jupyterlab spacy numpy h5py
 
 ## 2. Train
 
 ## Train with dataset Flixster
-CUDA_VISIBLE_DEVICES=1 python -W ignore Main.py --data-name flixster --hop 3 --epochs 40 --testing --ensemble
+# python train.py --data-name flixster --exp_name nrw0.1 -g 0 --wandb --ensemble
+
+# python train.py --data-name douban --exp_name nrw0.1 -g 0 --wandb --ensemble
+
+# python train.py --data-name yahoo_music --exp_name nrw0.2 -g 1 --version 1 --contrastive 0
 
 ## Train with dataset MovieLens-100k
-# python Main.py --data-name ml_100k --save-appendix _mnph200 --data-appendix _mnph200 --epochs 80 --max-nodes-per-hop 200 --testing --ensemble --dynamic-train
+# python train.py --data-name ml_100k --exp_name nrw0.1 -g 0 --wandb --ensemble
+
+# python train.py --data-name ml_1m --exp_name nrw0.1 -g 0 --wandb --ensemble

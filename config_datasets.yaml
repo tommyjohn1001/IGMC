@@ -1,0 +1,93 @@
+yahoo_music:
+  hop: 3
+  epochs: 250
+  testing: True
+  ensemble: True
+  batch_size: 64
+  max_neighbors: 50
+  max_walks: 10
+  lr_scheduler:
+    - range_epoch: 0,200
+      range_lr: 1e-3,1e-3
+    - range_epoch: 200,225
+      range_lr: 1e-3,9e-4
+    - range_epoch: 225,250
+      range_lr: 9e-4,8e-4
+
+flixster:
+  hop: 1
+  epochs: 250
+  testing: True
+  ensemble: True
+  batch_size: 64
+  max_neighbors: 50
+  max_walks: 10
+  lr_scheduler:
+    - range_epoch: 0,200
+      range_lr: 1e-3,1e-3
+    - range_epoch: 200,225
+      range_lr: 1e-3,9e-4
+    - range_epoch: 225,250
+      range_lr: 9e-4,8e-4
+
+douban:
+  hop: 1
+  epochs: 250
+  testing: True
+  ensemble: True
+  batch_size: 64
+  max_neighbors: 50
+  max_walks: 10
+  lr_scheduler:
+    - range_epoch: 0,80
+      range_lr: 1e-3,1e-3
+    - range_epoch: 80,110
+      range_lr: 8e-4,8e-4
+    - range_epoch: 110,140
+      range_lr: 6e-4,6e-4
+    - range_epoch: 140,170
+      range_lr: 4e-4,4e-4
+    - range_epoch: 170,250
+      range_lr: 2e-4,2e-4
+
+ml_1m:
+  save_appendix: _mnhp100
+  data_appendix: _mnph100
+  max_nodes_per_hop: 100
+  testing: True
+  epochs: 250
+  batch_size: 64
+  ensemble: True
+  dynamic_train: True
+  max_neighbors: 50
+  max_walks: 10
+  lr_scheduler:
+    - range_epoch: 0,200
+      range_lr: 1e-3,1e-3
+    - range_epoch: 200,225
+      range_lr: 1e-3,9e-4
+    - range_epoch: 225,250
+      range_lr: 9e-4,8e-4
+
+ml_100k:
+  save_appendix: _mnph200
+  data_appendix: _mnph100
+  max_nodes_per_hop: 200
+  testing: True
+  epochs: 200
+  batch_size: 64
+  ensemble: True
+  dynamic_train: True
+  max_neighbors: 50
+  max_walks: 10
+  lr_scheduler:
+    - range_epoch: 0,70
+      range_lr: 1e-3,1e-3
+    - range_epoch: 70,90
+      range_lr: 7e-4,7e-4
+    - range_epoch: 90,150
+      range_lr: 5e-4,5e-4
+    - range_epoch: 150,180
+      range_lr: 2e-4,2e-4
+    - range_epoch: 180,200
+      range_lr: 9e-5,9e-5

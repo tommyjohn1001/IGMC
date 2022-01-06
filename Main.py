@@ -2,25 +2,26 @@ import argparse
 import copy
 import math
 import os.path
-import pdb
 import random
 import sys
 import time
 import traceback
 import warnings
+from datetime import datetime, timedelta
 from shutil import copy, copytree, rmtree
 
 import numpy as np
 import scipy.io as sio
 import scipy.sparse as ssp
 import torch
+import yaml
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from data_utils import *
-from models import *
 from preprocessing import *
 from train_eval import *
 from util_functions import *
+from utils_model.models import *
 
 
 # used to traceback which code cause warnings, can delete
@@ -131,6 +132,9 @@ parser.add_argument(
     default=1.0,
     help="if < 1, subsample nodes per hop according to the ratio",
 )
+
+parser.add_argument("--percent_warmup", type=float, default=0.15)
+parser.add_argument("--init_lr", type=float, default=5e-4)
 parser.add_argument(
     "--max-nodes-per-hop",
     default=10000,
@@ -162,6 +166,8 @@ parser.add_argument(
     default=None,
     help="from which epoch's checkpoint to continue training",
 )
+parser.add_argument("--max_neighbors", type=int, default=50)
+parser.add_argument("--max_walks", type=int, default=10)
 parser.add_argument(
     "--lr", type=float, default=1e-3, metavar="LR", help="learning rate (default: 1e-3)"
 )
@@ -175,7 +181,7 @@ parser.add_argument(
     "--epochs", type=int, default=80, metavar="N", help="number of epochs to train"
 )
 parser.add_argument(
-    "--batch-size", type=int, default=50, metavar="N", help="batch size during training"
+    "--batch-size", type=int, default=128, metavar="N", help="batch size during training"
 )
 parser.add_argument("--test-freq", type=int, default=1, metavar="N", help="test every n epochs")
 parser.add_argument(
@@ -220,6 +226,7 @@ parser.add_argument(
     default=False,
     help="if True, maps all ratings to standard 1, 2, 3, 4, 5 before training",
 )
+parser.add_argument("--exp_name", type=str)
 # sparsity experiment settings
 parser.add_argument(
     "--ratio",
@@ -237,9 +244,32 @@ args = parser.parse_args()
 torch.manual_seed(args.seed)
 if torch.cuda.is_available():
     torch.cuda.manual_seed(args.seed)
-print(args)
+
 random.seed(args.seed)
 np.random.seed(args.seed)
+
+path_config_datasets = "config_datasets.yaml"
+assert os.path.isfile(f"./{path_config_datasets}")
+with open(path_config_datasets) as stream:
+    try:
+        config_dataset = yaml.safe_load(stream)
+    except yaml.YAMLError as exc:
+        print(exc)
+        exit()
+
+if not args.data_name in config_dataset.keys():
+    print(f"Err: Config of dataset {args.data_name} not in: config_datasets.yaml")
+    exit(1)
+
+config_dataset = config_dataset[args.data_name]
+for k, v in config_dataset.items():
+    if "lr" in k:
+        setattr(args, k, float(v))
+    else:
+        setattr(args, k, v)
+
+print(args)
+
 args.hop = int(args.hop)
 if args.max_nodes_per_hop is not None:
     args.max_nodes_per_hop = int(args.max_nodes_per_hop)
@@ -278,8 +308,12 @@ if args.testing:
     val_test_appendix = "testmode"
 else:
     val_test_appendix = "valmode"
+
+
+now = datetime.now() + timedelta(hours=7)
 args.res_dir = os.path.join(
-    args.file_dir, "results/{}{}_{}".format(args.data_name, args.save_appendix, val_test_appendix)
+    args.file_dir,
+    f"results/{args.exp_name}/{args.data_name}{args.save_appendix}_{val_test_appendix}/{now.strftime('%b%d_%H-%M')}",
 )
 if args.transfer == "":
     args.model_pos = os.path.join(args.res_dir, "model_checkpoint{}.pth".format(args.epochs))
@@ -292,7 +326,7 @@ if not args.keep_old and not args.transfer:
     # backup current main.py, model.py files
     copy("Main.py", args.res_dir)
     copy("util_functions.py", args.res_dir)
-    copy("models.py", args.res_dir)
+    copy("utils_model/models.py", args.res_dir)
     copy("train_eval.py", args.res_dir)
 # save command line input
 cmd_input = "python " + " ".join(sys.argv) + "\n"
@@ -537,6 +571,8 @@ else:
         n_side_features=n_features,
         multiply_by=multiply_by,
         batch_size=args.batch_size,
+        max_neighbors=args.max_neighbors,
+        max_walks=args.max_walks,
     )
     total_params = sum(p.numel() for param in model.parameters() for p in param)
     print(f"Total number of parameters is {total_params}")
@@ -544,6 +580,7 @@ else:
 
 if not args.no_train:
     train_multiple_epochs(
+        args,
         train_graphs,
         test_graphs,
         model,
@@ -558,6 +595,8 @@ if not args.no_train:
         logger=logger,
         continue_from=args.continue_from,
         res_dir=args.res_dir,
+        percent_warmup=args.percent_warmup,
+        init_lr=args.init_lr,
     )
 
 if args.visualize:

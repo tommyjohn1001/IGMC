@@ -12,3 +12,5 @@ log*
 slurms/
 *.err
 *.out
+*.tar.gz
+tests/

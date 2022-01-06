@@ -467,6 +467,8 @@ def get_trainer(args, hparams):
 
     additional_info = []
     additional_info.append(str(args.version))
+    if args.contrastive > 0:
+        additional_info.append("contrs")
     if args.superpod:
         additional_info.append("superpod")
     if len(args.gpus) > 1:
@@ -481,7 +483,7 @@ def get_trainer(args, hparams):
         monitor="val_loss",
         filename="{epoch}-{val_loss:.3f}",
         mode="min",
-        save_top_k=2,
+        save_top_k=5,
         save_last=True,
     )
     callback_tqdm = TQDMProgressBar(refresh_rate=5)

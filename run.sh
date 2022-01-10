@@ -7,9 +7,9 @@
 # CUDA=cu110
 # pip install torch-scatter -f https://data.pyg.org/whl/torch-${TORCH}+${CUDA}.html
 # pip install torch-sparse -f https://data.pyg.org/whl/torch-${TORCH}+${CUDA}.html
-# pip install torch-geometric
+# pip install -U torch-geometric==1.5.5
 
-# pip install loguru black isort jupyterlab
+# pip install loguru black isort jupyterlab spacy numpy h5py
 
 ## 2. Train
 

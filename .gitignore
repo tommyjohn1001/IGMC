@@ -9,5 +9,8 @@ __pycache__/
 git_old
 log*
 .vscode
+slurms/
+*.err
+*.out
 *.tar.gz
 tests/

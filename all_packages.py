@@ -11,4 +11,6 @@ from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.callbacks.progress import TQDMProgressBar
 from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
 from torch.optim import Adam
-from torch_geometric.loader import DataLoader
+from torch.utils.data import DataLoader
+
+# from torch_geometric.data import DataLoader

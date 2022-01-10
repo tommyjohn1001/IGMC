@@ -1,7 +1,8 @@
+from torch_geometric.data import Batch
+
 from all_packages import *
 from data_utils import *
 from preprocessing import *
-from train_eval import *
 from utils_model.models import *
 
 
@@ -480,8 +481,12 @@ def get_trainer(args, hparams):
 
     callback_ckpt = ModelCheckpoint(
         dirpath=path_dir_ckpt,
-        monitor="val_loss",
         filename="{epoch}-{val_loss:.3f}",
+        # monitor="epoch",
+        # mode="max",
+        # save_top_k=4,
+        # every_n_epochs=10
+        monitor="val_loss",
         mode="min",
         save_top_k=5,
         save_last=True,
@@ -514,10 +519,18 @@ def get_trainer(args, hparams):
 
 def get_loaders(train_graphs, test_graphs, hparams):
     train_loader = DataLoader(
-        train_graphs, hparams["batch_size"], shuffle=True, num_workers=hparams["num_workers"]
+        train_graphs,
+        hparams["batch_size"],
+        shuffle=True,
+        num_workers=hparams["num_workers"],
+        collate_fn=lambda batch: Batch.from_data_list(batch, []),
     )
     val_loader = DataLoader(
-        test_graphs, hparams["batch_size"], shuffle=False, num_workers=hparams["num_workers"]
+        test_graphs,
+        hparams["batch_size"],
+        shuffle=False,
+        num_workers=hparams["num_workers"],
+        collate_fn=lambda batch: Batch.from_data_list(batch, []),
     )
 
     return train_loader, val_loader

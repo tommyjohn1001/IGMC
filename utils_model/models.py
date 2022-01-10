@@ -5,7 +5,6 @@ from all_packages import *
 from torch.nn import Linear
 from torch_geometric.nn import GCNConv, RGCNConv
 from torch_geometric.utils import dropout_adj
-from train_eval import get_linear_schedule_with_warmup
 from util_functions import *
 
 from utils_model.layers import *
@@ -234,11 +233,11 @@ class IGMC(GNN):
         loss_arr = 0
         if self.ARR > 0:
             for gconv in self.convs:
-                w = torch.matmul(gconv.comp, gconv.weight.view(gconv.num_bases, -1)).view(
+                w = torch.matmul(gconv.att, gconv.basis.view(gconv.num_bases, -1)).view(
                     gconv.num_relations, gconv.in_channels, gconv.out_channels
                 )
                 reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :]) ** 2)
-                loss_arr = reg_loss
+                loss_arr += reg_loss
 
         ## Custom Contrastive loss
         loss_contrastive = 0
@@ -252,11 +251,69 @@ class IGMC(GNN):
         loss = loss_mse + self.ARR * loss_arr + self.contrastive * loss_contrastive
         if torch.isnan(loss):
             print(f"NaN: {loss_mse} - {loss_arr} - {loss_contrastive}")
-            exit(1)
+            sys.exit(1)
         if loss < 0:
             print(f"below 0: {loss_mse} - {loss_arr} - {loss_contrastive}")
 
         return x[:, 0], loss
+
+    #     super(IGMC, self).__init__(
+    #         dataset, GCNConv, latent_dim, regression, adj_dropout, force_undirected
+    #     )
+
+    #     self.ARR = ARR
+
+    #     self.multiply_by = multiply_by
+    #     self.convs = torch.nn.ModuleList()
+    #     self.convs.append(gconv(dataset.num_features, latent_dim[0], num_relations, num_bases))
+    #     for i in range(0, len(latent_dim) - 1):
+    #         self.convs.append(gconv(latent_dim[i], latent_dim[i + 1], num_relations, num_bases))
+    #     self.lin1 = Linear(2 * sum(latent_dim), 128)
+    #     self.side_features = side_features
+    #     if side_features:
+    #         self.lin1 = Linear(2 * sum(latent_dim) + n_side_features, 128)
+
+    # def forward(self, data):
+    #     x, edge_index, edge_type, batch = data.x, data.edge_index, data.edge_type, data.batch
+    #     if self.adj_dropout > 0:
+    #         edge_index, edge_type = dropout_adj(
+    #             edge_index,
+    #             edge_type,
+    #             p=self.adj_dropout,
+    #             force_undirected=self.force_undirected,
+    #             num_nodes=len(x),
+    #             training=self.training,
+    #         )
+    #     concat_states = []
+    #     for conv in self.convs:
+    #         x = torch.tanh(conv(x, edge_index, edge_type))
+    #         concat_states.append(x)
+    #     concat_states = torch.cat(concat_states, 1)
+
+    #     users = data.x[:, 0] == 1
+    #     items = data.x[:, 1] == 1
+    #     x = torch.cat([concat_states[users], concat_states[items]], 1)
+    #     if self.side_features:
+    #         x = torch.cat([x, data.u_feature, data.v_feature], 1)
+
+    #     x = F.relu(self.lin1(x))
+    #     x = F.dropout(x, p=0.5, training=self.training)
+    #     x = self.lin2(x)
+
+    #     loss_mse = F.mse_loss(x[:, 0] * self.multiply_by, data.y.view(-1))
+
+    #     loss_arr = 0
+    #     if self.ARR > 0:
+    #         for gconv in self.convs:
+    #             w = torch.matmul(gconv.att, gconv.basis.view(gconv.num_bases, -1)).view(
+    #                 gconv.num_relations, gconv.in_channels, gconv.out_channels
+    #             )
+    #             reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :]) ** 2)
+    #             loss_arr += reg_loss
+
+    #     loss = loss_mse + self.ARR * loss_arr
+
+    #     return x[:, 0], loss
 
 
 class IGMC2(GNN):
@@ -547,11 +604,11 @@ class IGMC2(GNN):
         loss_arr = 0
         if self.ARR > 0:
             for gconv in self.convs:
-                w = torch.matmul(gconv.comp, gconv.weight.view(gconv.num_bases, -1)).view(
+                w = torch.matmul(gconv.att, gconv.basis.view(gconv.num_bases, -1)).view(
                     gconv.num_relations, gconv.in_channels, gconv.out_channels
                 )
                 reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :]) ** 2)
-                loss_arr = reg_loss
+                loss_arr += reg_loss
 
         ## Custom Contrastive loss
         loss_contrastive = 0
@@ -582,15 +639,15 @@ class IGMCLitModel(LightningModule):
         self._hparams = hps
         self.model = model
 
-    def forward(self):
-        pass
-
     def training_step(self, batch, batch_idx):
         _, loss = self.model(batch)
 
         self.log("train_loss", loss, on_step=True, on_epoch=True)
 
         return loss
+
+    def training_epoch_end(self, outputs):
+        self.log("epoch", self.current_epoch, on_epoch=True)
 
     def validation_step(self, batch, batch_idx):
         out, _ = self.model(batch)
@@ -618,7 +675,6 @@ class IGMCLitModel(LightningModule):
 
     def on_predict_epoch_end(self, results):
         preds, trgs = [], []
-        aList = []
         for output in results[0]:
             preds.append(output[0])
             trgs.append(output[1])

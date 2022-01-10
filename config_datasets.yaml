@@ -32,7 +32,7 @@ flixster:
 
 douban:
   hop: 1
-  epochs: 250
+  epochs: 200
   testing: True
   ensemble: True
   batch_size: 64
@@ -41,14 +41,12 @@ douban:
   lr_scheduler:
     - range_epoch: 0,80
       range_lr: 1e-3,1e-3
-    - range_epoch: 80,110
+    - range_epoch: 80,120
       range_lr: 8e-4,8e-4
-    - range_epoch: 110,140
+    - range_epoch: 120,160
       range_lr: 6e-4,6e-4
-    - range_epoch: 140,170
+    - range_epoch: 200,200
       range_lr: 4e-4,4e-4
-    - range_epoch: 170,250
-      range_lr: 2e-4,2e-4
 
 ml_1m:
   save_appendix: _mnhp100

@@ -1,7 +1,7 @@
 #!/bin/bash -e
 #SBATCH --job-name=IGMC            # create a short name for your job
-#SBATCH --output=/lustre/scratch/client/vinai/users/hoanglh88/IGMC/slurms/ml_1m_nrw2_Jan4.out      # create a output file
-#SBATCH --error=/lustre/scratch/client/vinai/users/hoanglh88/IGMC/slurms/ml_1m_nrw2_Jan4.err       # create a error file
+#SBATCH --output=/lustre/scratch/client/vinai/users/hoanglh88/IGMC/slurms/ml_100k_nrw2_Jan7.out      # create a output file
+#SBATCH --error=/lustre/scratch/client/vinai/users/hoanglh88/IGMC/slurms/ml_100k_nrw2_Jan7.err       # create a error file
 #SBATCH --partition=research
 #SBATCH --gres=gpu:1              # gpu count
 #SBATCH --ntasks=1                 # total number of tasks across all nodes
@@ -32,10 +32,10 @@ srun --container-image=/lustre/scratch/client/vinai/users/hoanglh88/dc-miniconda
      conda activate igmc/
 
      cd /hoanglh88/IGMC
-     python train.py --data-name ml_1m\
+     python train.py --data-name ml_100k\
           --exp_name nrw\
           --version 2\
-          --contrastive 0.2\
+          --contrastive 0.15\
           --wandb\
           --superpod
      "

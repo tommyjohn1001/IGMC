@@ -45,7 +45,7 @@ douban:
       range_lr: 8e-4,8e-4
     - range_epoch: 120,160
       range_lr: 6e-4,6e-4
-    - range_epoch: 200,200
+    - range_epoch: 160,200
       range_lr: 4e-4,4e-4
 
 ml_1m:

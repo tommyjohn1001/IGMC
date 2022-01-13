@@ -1,40 +1,37 @@
 yahoo_music:
   hop: 3
-  epochs: 250
-  testing: True
+  epochs: 200
   ensemble: True
   batch_size: 64
   max_neighbors: 50
   max_walks: 10
   lr_scheduler:
-    - range_epoch: 0,200
+    - range_epoch: 0,120
       range_lr: 1e-3,1e-3
-    - range_epoch: 200,225
-      range_lr: 1e-3,9e-4
-    - range_epoch: 225,250
-      range_lr: 9e-4,8e-4
+    - range_epoch: 120,160
+      range_lr: 8.5e-4,8.5e-4
+    - range_epoch: 160,200
+      range_lr: 7e-4,7e-4
 
 flixster:
   hop: 1
-  epochs: 250
-  testing: True
-  ensemble: True
+  epochs: 200
   batch_size: 64
   max_neighbors: 50
   max_walks: 10
   lr_scheduler:
-    - range_epoch: 0,200
+    - range_epoch: 0,80
       range_lr: 1e-3,1e-3
-    - range_epoch: 200,225
-      range_lr: 1e-3,9e-4
-    - range_epoch: 225,250
-      range_lr: 9e-4,8e-4
+    - range_epoch: 80,120
+      range_lr: 8e-4,8e-4
+    - range_epoch: 120,160
+      range_lr: 6e-4,6e-4
+    - range_epoch: 160,200
+      range_lr: 4e-4,4e-4
 
 douban:
   hop: 1
   epochs: 200
-  testing: True
-  ensemble: True
   batch_size: 64
   max_neighbors: 50
   max_walks: 10
@@ -52,38 +49,36 @@ ml_1m:
   save_appendix: _mnhp100
   data_appendix: _mnph100
   max_nodes_per_hop: 100
-  testing: True
-  epochs: 250
+  epochs: 200
   batch_size: 64
-  ensemble: True
   dynamic_train: True
   max_neighbors: 50
   max_walks: 10
   lr_scheduler:
-    - range_epoch: 0,200
+    - range_epoch: 0,80
       range_lr: 1e-3,1e-3
-    - range_epoch: 200,225
-      range_lr: 1e-3,9e-4
-    - range_epoch: 225,250
-      range_lr: 9e-4,8e-4
+    - range_epoch: 80,120
+      range_lr: 8e-4,8e-4
+    - range_epoch: 120,160
+      range_lr: 6e-4,6e-4
+    - range_epoch: 160,200
+      range_lr: 4e-4,4e-4
 
 ml_100k:
   save_appendix: _mnph200
   data_appendix: _mnph100
   max_nodes_per_hop: 200
-  testing: True
-  epochs: 350
+  epochs: 200
   batch_size: 64
-  ensemble: True
   dynamic_train: True
   max_neighbors: 50
   max_walks: 10
   lr_scheduler:
-    - range_epoch: 0,100
+    - range_epoch: 0,80
       range_lr: 1e-3,1e-3
-    - range_epoch: 100,200
+    - range_epoch: 80,120
       range_lr: 8e-4,8e-4
-    - range_epoch: 200,300
+    - range_epoch: 120,160
       range_lr: 6e-4,6e-4
-    - range_epoch: 300,350
+    - range_epoch: 160,200
       range_lr: 4e-4,4e-4

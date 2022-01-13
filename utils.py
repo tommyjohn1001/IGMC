@@ -1,5 +1,6 @@
 from torch_geometric.data import Batch
 
+import util_functions
 from all_packages import *
 from data_utils import *
 from preprocessing import *
@@ -96,18 +97,13 @@ def get_train_val_datasets(args):
             args.ratio,
         )
 
-    if args.testing:
-        val_test_appendix = "testmode"
-    else:
-        val_test_appendix = "valmode"
-    data_combo = (args.data_name, args.data_appendix, val_test_appendix)
     train_indices = (train_u_indices, train_v_indices)
     val_indices = (val_u_indices, val_v_indices)
     test_indices = (test_u_indices, test_v_indices)
 
     dataset_class = "MyDynamicDataset" if args.dynamic_train else "MyDataset"
-    train_graphs = eval(dataset_class)(
-        "data/{}{}/{}/train".format(*data_combo),
+    train_graphs = getattr(util_functions, dataset_class)(
+        f"data/{args.data_name}/train",
         adj_train,
         train_indices,
         train_labels,
@@ -119,9 +115,8 @@ def get_train_val_datasets(args):
         class_values,
         max_num=args.max_train_num,
     )
-    dataset_class = "MyDynamicDataset" if args.dynamic_test else "MyDataset"
-    test_graphs = eval(dataset_class)(
-        "data/{}{}/{}/test".format(*data_combo),
+    test_graphs = getattr(util_functions, dataset_class)(
+        f"data/{args.data_name}/test",
         adj_train,
         test_indices,
         test_labels,
@@ -133,35 +128,25 @@ def get_train_val_datasets(args):
         class_values,
         max_num=args.max_test_num,
     )
-    if not args.testing:
-        dataset_class = "MyDynamicDataset" if args.dynamic_val else "MyDataset"
-        val_graphs = eval(dataset_class)(
-            "data/{}{}/{}/val".format(*data_combo),
-            adj_train,
-            val_indices,
-            val_labels,
-            args.hop,
-            args.sample_ratio,
-            args.max_nodes_per_hop,
-            u_features,
-            v_features,
-            class_values,
-            max_num=args.max_val_num,
-        )
-
-    # Determine testing data (on which data to evaluate the trained model
-    if not args.testing:
-        test_graphs = val_graphs
-
-    print(
-        "Used #train graphs: %d, #test graphs: %d"
-        % (
-            len(train_graphs),
-            len(test_graphs),
-        )
+    val_graphs = getattr(util_functions, dataset_class)(
+        f"data/{args.data_name}/val",
+        adj_train,
+        val_indices,
+        val_labels,
+        args.hop,
+        args.sample_ratio,
+        args.max_nodes_per_hop,
+        u_features,
+        v_features,
+        class_values,
+        max_num=args.max_val_num,
     )
 
-    return train_graphs, test_graphs, u_features, v_features, class_values
+    logger.info(
+        f"Data info: train: {len(train_graphs)} - val: {len(val_graphs)} - test: {len(test_graphs)}"
+    )
+
+    return train_graphs, test_graphs, val_graphs, u_features, v_features, class_values
 
 
 def get_args():
@@ -517,7 +502,7 @@ def get_trainer(args, hparams):
     return trainer_train, trainer_eval, path_dir_ckpt
 
 
-def get_loaders(train_graphs, test_graphs, hparams):
+def get_loaders(train_graphs, test_graphs, val_graphs, hparams):
     train_loader = DataLoader(
         train_graphs,
         hparams["batch_size"],
@@ -525,15 +510,22 @@ def get_loaders(train_graphs, test_graphs, hparams):
         num_workers=hparams["num_workers"],
         collate_fn=lambda batch: Batch.from_data_list(batch, []),
     )
-    val_loader = DataLoader(
+    test_loader = DataLoader(
         test_graphs,
         hparams["batch_size"],
         shuffle=False,
         num_workers=hparams["num_workers"],
         collate_fn=lambda batch: Batch.from_data_list(batch, []),
     )
+    val_loader = DataLoader(
+        val_graphs,
+        hparams["batch_size"],
+        shuffle=False,
+        num_workers=hparams["num_workers"],
+        collate_fn=lambda batch: Batch.from_data_list(batch, []),
+    )
 
-    return train_loader, val_loader
+    return train_loader, test_loader, val_loader
 
 
 def final_test_model(path_dir_ckpt, model, trainer, val_loader):

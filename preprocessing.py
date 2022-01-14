@@ -191,9 +191,7 @@ def create_trainvaltest_split(
     all_labels = np.array([rating_dict[r] for r in ratings], dtype=np.int32)
     train_labels = all_labels[0 : int(num_train * ratio)]
     val_labels = all_labels[num_train : num_train + num_val]
-    test_labels = all_labels[num_train + num_val :]
-
-    
+    test_labels = all_labels[num_train + num_val :]    
     u_train_idx = np.hstack([u_train_idx, u_val_idx])
     v_train_idx = np.hstack([v_train_idx, v_val_idx])
     train_labels = np.hstack([train_labels, val_labels])
@@ -333,7 +331,6 @@ def load_data_monti(dataset, testing=False, rating_map=None, post_rating_map=Non
     val_labels = labels[val_idx]
     test_labels = labels[test_idx]
 
-    
     u_train_idx = np.hstack([u_train_idx, u_val_idx])
     v_train_idx = np.hstack([v_train_idx, v_val_idx])
     train_labels = np.hstack([train_labels, val_labels])
@@ -514,7 +511,6 @@ def load_official_trainvaltest_split(
     val_labels = labels[val_idx]
     test_labels = labels[test_idx]
 
-    
     u_train_idx = np.hstack([u_train_idx, u_val_idx])
     v_train_idx = np.hstack([v_train_idx, v_val_idx])
     train_labels = np.hstack([train_labels, val_labels])

@@ -115,7 +115,6 @@ def get_train_val_datasets(args):
         class_values,
         max_num=args.max_train_num,
     )
-    dataset_class = "MyDynamicDataset" if args.dynamic_test else "MyDataset"
     test_graphs = getattr(util_functions, dataset_class)(
         f"data/{args.data_name}/test",
         adj_train,
@@ -129,8 +128,23 @@ def get_train_val_datasets(args):
         class_values,
         max_num=args.max_test_num,
     )
+    # val_graphs = getattr(util_functions, dataset_class)(
+    #     f"data/{args.data_name}/val",
+    #     adj_train,
+    #     val_indices,
+    #     val_labels,
+    #     args.hop,
+    #     args.sample_ratio,
+    #     args.max_nodes_per_hop,
+    #     u_features,
+    #     v_features,
+    #     class_values,
+    #     max_num=args.max_val_num,
+    # )
+
     logger.info(
-        f"Data info: train: {len(train_graphs)} - test: {len(test_graphs)}")
+        f"Data info: train: {len(train_graphs)} - test: {len(test_graphs)}"
+    )
 
     return train_graphs, test_graphs, u_features, v_features, class_values
 
@@ -453,14 +467,14 @@ def get_trainer(args, hparams):
     callback_ckpt = ModelCheckpoint(
         dirpath=path_dir_ckpt,
         filename="{epoch}-{val_loss:.3f}",
-        # monitor="epoch",
-        # mode="max",
-        # save_top_k=4,
-        # every_n_epochs=10
-        monitor="val_loss",
-        mode="min",
+        monitor="epoch",
+        mode="max",
         save_top_k=5,
-        save_last=True,
+        every_n_epochs=10
+        # monitor="val_loss",
+        # mode="min",
+        # save_top_k=5,
+        # save_last=True,
     )
     callback_tqdm = TQDMProgressBar(refresh_rate=5)
     callback_lrmornitor = LearningRateMonitor(logging_interval="step")
@@ -507,7 +521,7 @@ def get_loaders(train_graphs, test_graphs, hparams):
     return train_loader, test_loader
 
 
-def final_test_model(path_dir_ckpt, model, trainer, val_loader):
+def final_test_model(path_dir_ckpt, model, trainer, test_loader):
     path_ckpts = glob(osp.join(path_dir_ckpt, "*.ckpt"))
     assert len(path_ckpts) > 0, "No ckpt found"
 
@@ -515,7 +529,7 @@ def final_test_model(path_dir_ckpt, model, trainer, val_loader):
     for path_ckpt in path_ckpts:
         outputs = trainer.predict(
             model,
-            val_loader,
+            test_loader,
             return_predictions=True,
             ckpt_path=path_ckpt,
         )

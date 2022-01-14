@@ -23,20 +23,11 @@ if __name__ == "__main__":
         "lr_scheduler": config_dataset["lr_scheduler"],
     }
 
-    (
-        train_graphs,
-        test_graphs,
-        val_graphs,
-        u_features,
-        v_features,
-        class_values,
-    ) = get_train_val_datasets(args)
+    train_graphs, test_graphs, u_features, v_features, class_values = get_train_val_datasets(args)
     print("All ratings are:")
     print(class_values)
 
-    train_loader, test_loader, val_loader = get_loaders(
-        train_graphs, test_graphs, val_graphs, hparams
-    )
+    train_loader, test_loader = get_loaders(train_graphs, test_graphs, hparams)
     model = get_model(args, hparams, train_graphs, u_features, v_features, class_values)
     trainer_train, trainer_eval, path_dir_ckpt = get_trainer(args, hparams)
     lit_model = IGMCLitModel(model, hparams)
@@ -47,7 +38,7 @@ if __name__ == "__main__":
         trainer_train.fit(
             lit_model,
             train_dataloaders=train_loader,
-            val_dataloaders=val_loader,
+            val_dataloaders=test_loader,
             ckpt_path=args.ckpt,
         )
     else:

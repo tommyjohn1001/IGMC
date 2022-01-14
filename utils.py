@@ -115,6 +115,7 @@ def get_train_val_datasets(args):
         class_values,
         max_num=args.max_train_num,
     )
+    dataset_class = "MyDynamicDataset" if args.dynamic_test else "MyDataset"
     test_graphs = getattr(util_functions, dataset_class)(
         f"data/{args.data_name}/test",
         adj_train,
@@ -128,25 +129,10 @@ def get_train_val_datasets(args):
         class_values,
         max_num=args.max_test_num,
     )
-    val_graphs = getattr(util_functions, dataset_class)(
-        f"data/{args.data_name}/val",
-        adj_train,
-        val_indices,
-        val_labels,
-        args.hop,
-        args.sample_ratio,
-        args.max_nodes_per_hop,
-        u_features,
-        v_features,
-        class_values,
-        max_num=args.max_val_num,
-    )
-
     logger.info(
-        f"Data info: train: {len(train_graphs)} - val: {len(val_graphs)} - test: {len(test_graphs)}"
-    )
+        f"Data info: train: {len(train_graphs)} - test: {len(test_graphs)}"
 
-    return train_graphs, test_graphs, val_graphs, u_features, v_features, class_values
+    return train_graphs, test_graphs, u_features, v_features, class_values
 
 
 def get_args():
@@ -502,7 +488,7 @@ def get_trainer(args, hparams):
     return trainer_train, trainer_eval, path_dir_ckpt
 
 
-def get_loaders(train_graphs, test_graphs, val_graphs, hparams):
+def get_loaders(train_graphs, test_graphs, hparams):
     train_loader = DataLoader(
         train_graphs,
         hparams["batch_size"],
@@ -517,15 +503,8 @@ def get_loaders(train_graphs, test_graphs, val_graphs, hparams):
         num_workers=hparams["num_workers"],
         collate_fn=lambda batch: Batch.from_data_list(batch, []),
     )
-    val_loader = DataLoader(
-        val_graphs,
-        hparams["batch_size"],
-        shuffle=False,
-        num_workers=hparams["num_workers"],
-        collate_fn=lambda batch: Batch.from_data_list(batch, []),
-    )
 
-    return train_loader, test_loader, val_loader
+    return train_loader, test_loader
 
 
 def final_test_model(path_dir_ckpt, model, trainer, val_loader):

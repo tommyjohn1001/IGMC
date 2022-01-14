@@ -193,11 +193,10 @@ def create_trainvaltest_split(
     val_labels = all_labels[num_train : num_train + num_val]
     test_labels = all_labels[num_train + num_val :]
 
-    # NOTE: Since separating train/val/test, this piece of code is disabled
-    # if testing:
-    #     u_train_idx = np.hstack([u_train_idx, u_val_idx])
-    #     v_train_idx = np.hstack([v_train_idx, v_val_idx])
-    #     train_labels = np.hstack([train_labels, val_labels])
+    
+    u_train_idx = np.hstack([u_train_idx, u_val_idx])
+    v_train_idx = np.hstack([v_train_idx, v_val_idx])
+    train_labels = np.hstack([train_labels, val_labels])
 
     class_values = np.sort(np.unique(ratings))
 
@@ -334,13 +333,12 @@ def load_data_monti(dataset, testing=False, rating_map=None, post_rating_map=Non
     val_labels = labels[val_idx]
     test_labels = labels[test_idx]
 
-    # NOTE: Since separating train/val/test, this piece of code is disabled
-    # if testing:
-    #     u_train_idx = np.hstack([u_train_idx, u_val_idx])
-    #     v_train_idx = np.hstack([v_train_idx, v_val_idx])
-    #     train_labels = np.hstack([train_labels, val_labels])
-    #     # for adjacency matrix construction
-    #     train_idx = np.hstack([train_idx, val_idx])
+    
+    u_train_idx = np.hstack([u_train_idx, u_val_idx])
+    v_train_idx = np.hstack([v_train_idx, v_val_idx])
+    train_labels = np.hstack([train_labels, val_labels])
+    # for adjacency matrix construction
+    train_idx = np.hstack([train_idx, val_idx])
 
     class_values = np.sort(np.unique(ratings))
 
@@ -516,12 +514,12 @@ def load_official_trainvaltest_split(
     val_labels = labels[val_idx]
     test_labels = labels[test_idx]
 
-    if testing:
-        u_train_idx = np.hstack([u_train_idx, u_val_idx])
-        v_train_idx = np.hstack([v_train_idx, v_val_idx])
-        train_labels = np.hstack([train_labels, val_labels])
-        # for adjacency matrix construction
-        train_idx = np.hstack([train_idx, val_idx])
+    
+    u_train_idx = np.hstack([u_train_idx, u_val_idx])
+    v_train_idx = np.hstack([v_train_idx, v_val_idx])
+    train_labels = np.hstack([train_labels, val_labels])
+    # for adjacency matrix construction
+    train_idx = np.hstack([train_idx, val_idx])
 
     class_values = np.sort(np.unique(ratings))
 

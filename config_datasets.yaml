@@ -6,12 +6,12 @@ yahoo_music:
   max_neighbors: 50
   max_walks: 10
   lr_scheduler:
-    - range_epoch: 0,120
+    - range_epoch: 0,100
       range_lr: 1e-3,1e-3
-    - range_epoch: 120,160
-      range_lr: 8.5e-4,8.5e-4
-    - range_epoch: 160,200
-      range_lr: 7e-4,7e-4
+    - range_epoch: 100,150
+      range_lr: 9e-4,9e-4
+    - range_epoch: 150,200
+      range_lr: 8e-3,8e-3
 
 flixster:
   hop: 1

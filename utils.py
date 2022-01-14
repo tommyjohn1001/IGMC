@@ -130,7 +130,7 @@ def get_train_val_datasets(args):
         max_num=args.max_test_num,
     )
     logger.info(
-        f"Data info: train: {len(train_graphs)} - test: {len(test_graphs)}"
+        f"Data info: train: {len(train_graphs)} - test: {len(test_graphs)}")
 
     return train_graphs, test_graphs, u_features, v_features, class_values
 

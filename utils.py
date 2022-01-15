@@ -470,7 +470,7 @@ def get_trainer(args, hparams):
         monitor="epoch",
         mode="max",
         save_top_k=5,
-        every_n_epochs=10
+        every_n_epochs=args.save_interval
         # monitor="val_loss",
         # mode="min",
         # save_top_k=5,

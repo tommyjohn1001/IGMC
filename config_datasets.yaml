@@ -1,52 +1,41 @@
 yahoo_music:
-  hop: 3
-  epochs: 150
-  ensemble: True
+  hop: 1
+  epochs: 60
   batch_size: 64
   max_neighbors: 50
-  save_interval: 10
-  max_walks: 10
+  save_interval: 8
+  hid_dim: 64
+  max_walks: 20
+  ARR: 0.0171
   lr_scheduler:
-    - range_epoch: 0,80
-      range_lr: 1e-3,1e-3
-    - range_epoch: 80,115
-      range_lr: 9e-4,9e-4
-    - range_epoch: 115,150
-      range_lr: 8e-4,8e-4
+    - range_epoch: 0,60
+      range_lr: 3e-3,3e-3
 
 flixster:
   hop: 1
-  epochs: 200
+  epochs: 60
   batch_size: 64
   max_neighbors: 50
-  max_walks: 10
-  save_interval: 10
+  save_interval: 8
+  hid_dim: 64
+  max_walks: 20
+  ARR: 0.0171
   lr_scheduler:
-    - range_epoch: 0,80
+    - range_epoch: 0,60
       range_lr: 1e-3,1e-3
-    - range_epoch: 80,120
-      range_lr: 8e-4,8e-4
-    - range_epoch: 120,160
-      range_lr: 6e-4,6e-4
-    - range_epoch: 160,200
-      range_lr: 4e-4,4e-4
 
 douban:
   hop: 1
-  epochs: 200
+  epochs: 60
   batch_size: 64
   max_neighbors: 50
-  max_walks: 10
-  save_interval: 10
+  save_interval: 8
+  hid_dim: 64
+  max_walks: 20
+  ARR: 0.0171
   lr_scheduler:
-    - range_epoch: 0,100
+    - range_epoch: 0,60
       range_lr: 1e-3,1e-3
-    - range_epoch: 100,120
-      range_lr: 8e-4,8e-4
-    - range_epoch: 120,160
-      range_lr: 6e-4,6e-4
-    - range_epoch: 160,200
-      range_lr: 4e-4,4e-4
 
 ml_1m:
   save_appendix: _mnhp100
@@ -54,10 +43,12 @@ ml_1m:
   max_nodes_per_hop: 100
   epochs: 200
   batch_size: 64
+  hid_dim: 64
+  max_walks: 20
+  ARR: 0.0171
   dynamic_train: True
   max_neighbors: 50
   save_interval: 15
-  max_walks: 10
   lr_scheduler:
     - range_epoch: 0,80
       range_lr: 1e-3,1e-3
@@ -72,12 +63,14 @@ ml_100k:
   save_appendix: _mnph200
   data_appendix: _mnph100
   max_nodes_per_hop: 200
-  save_interval: 15
   epochs: 200
   batch_size: 64
+  hid_dim: 64
+  max_walks: 20
+  ARR: 0.0171
   dynamic_train: True
   max_neighbors: 50
-  max_walks: 10
+  save_interval: 15
   lr_scheduler:
     - range_epoch: 0,80
       range_lr: 1e-3,1e-3

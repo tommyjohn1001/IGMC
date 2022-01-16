@@ -24,3 +24,7 @@
 # python train.py --data-name ml_100k --exp_name nrw -g 0 --wandb --version 1 --contrastive 0
 
 # python train.py --data-name ml_1m --exp_name nrw -g 0 --wandb --version 1 --contrastive 0
+
+
+## 3. Tune
+# python tune.py --data-name yahoo_music --exp_name nrw -g 1 --version 1 --contrastive 0

@@ -19,6 +19,7 @@ class GNN(torch.nn.Module):
         regression=False,
         adj_dropout=0.2,
         force_undirected=False,
+        hid_dim=128,
     ):
         super(GNN, self).__init__()
         self.regression = regression
@@ -28,11 +29,11 @@ class GNN(torch.nn.Module):
         self.convs.append(gconv(dataset.num_features, latent_dim[0]))
         for i in range(0, len(latent_dim) - 1):
             self.convs.append(gconv(latent_dim[i], latent_dim[i + 1]))
-        self.lin1 = Linear(sum(latent_dim), 128)
+        self.lin1 = Linear(sum(latent_dim), hid_dim)
         if self.regression:
-            self.lin2 = Linear(128, 1)
+            self.lin2 = Linear(hid_dim, 1)
         else:
-            self.lin2 = Linear(128, dataset.num_classes)
+            self.lin2 = Linear(hid_dim, dataset.num_classes)
 
     def reset_parameters(self):
         for conv in self.convs:

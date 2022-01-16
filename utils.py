@@ -7,7 +7,7 @@ from preprocessing import *
 from utils_model.models import *
 
 
-def get_train_val_datasets(args):
+def get_train_val_datasets(args, tuning=False):
     rating_map, post_rating_map = None, None
     if args.standard_rating:
         if args.data_name in ["flixster", "ml_10m"]:  # original 0.5, 1, ..., 5
@@ -50,7 +50,7 @@ def get_train_val_datasets(args):
             test_u_indices,
             test_v_indices,
             class_values,
-        ) = load_data_monti(args.data_name, args.testing, rating_map, post_rating_map)
+        ) = load_data_monti(args.data_name, tuning, rating_map, post_rating_map)
     elif args.data_name == "ml_100k":
         print("Using official MovieLens split u1.base/u1.test with 20% validation...")
         (
@@ -68,7 +68,7 @@ def get_train_val_datasets(args):
             test_v_indices,
             class_values,
         ) = load_official_trainvaltest_split(
-            args.data_name, args.testing, rating_map, post_rating_map, args.ratio
+            args.data_name, tuning, rating_map, post_rating_map, args.ratio
         )
     else:
         (
@@ -88,7 +88,7 @@ def get_train_val_datasets(args):
         ) = create_trainvaltest_split(
             args.data_name,
             1234,
-            args.testing,
+            tuning,
             datasplit_path,
             True,
             True,
@@ -101,9 +101,10 @@ def get_train_val_datasets(args):
     val_indices = (val_u_indices, val_v_indices)
     test_indices = (test_u_indices, test_v_indices)
 
+    mode = "tuning" if tuning is True else "testing"
     dataset_class = "MyDynamicDataset" if args.dynamic_train else "MyDataset"
     train_graphs = getattr(util_functions, dataset_class)(
-        f"data/{args.data_name}/train",
+        f"data/{mode}/{args.data_name}/train",
         adj_train,
         train_indices,
         train_labels,
@@ -116,7 +117,7 @@ def get_train_val_datasets(args):
         max_num=args.max_train_num,
     )
     test_graphs = getattr(util_functions, dataset_class)(
-        f"data/{args.data_name}/test",
+        f"data/{mode}/{args.data_name}/test",
         adj_train,
         test_indices,
         test_labels,
@@ -128,25 +129,26 @@ def get_train_val_datasets(args):
         class_values,
         max_num=args.max_test_num,
     )
-    # val_graphs = getattr(util_functions, dataset_class)(
-    #     f"data/{args.data_name}/val",
-    #     adj_train,
-    #     val_indices,
-    #     val_labels,
-    #     args.hop,
-    #     args.sample_ratio,
-    #     args.max_nodes_per_hop,
-    #     u_features,
-    #     v_features,
-    #     class_values,
-    #     max_num=args.max_val_num,
-    # )
-
-    logger.info(
-        f"Data info: train: {len(train_graphs)} - test: {len(test_graphs)}"
+    val_graphs = getattr(util_functions, dataset_class)(
+        f"data/{mode}/{args.data_name}/val",
+        adj_train,
+        val_indices,
+        val_labels,
+        args.hop,
+        args.sample_ratio,
+        args.max_nodes_per_hop,
+        u_features,
+        v_features,
+        class_values,
+        max_num=args.max_val_num,
     )
 
-    return train_graphs, test_graphs, u_features, v_features, class_values
+    if not tuning:
+        logger.info(f"Data info: train: {len(train_graphs)} - test: {len(test_graphs)}")
+    else:
+        logger.info(f"Data info: train: {len(train_graphs)} - val: {len(val_graphs)}")
+
+    return train_graphs, val_graphs, test_graphs, u_features, v_features, class_values
 
 
 def get_args():
@@ -179,6 +181,7 @@ def get_args():
         choices=[1, 2],
         help="Switch between Naive Reasoning Walking ver 1 and 2",
     )
+    parser.add_argument("--hid-dim", type=int, default=64)
 
     ################################################################################################################
 
@@ -421,11 +424,14 @@ def get_model(args, hparams, train_dataset, u_features, v_features, class_values
         model = "IGMC2"
     else:
         raise NotImplementedError()
+
+    latent_dim_each = hparams["hid_dim"] // 4
     model = eval(model)(
         train_dataset,
-        latent_dim=[32, 32, 32, 32],
+        latent_dim=[latent_dim_each, latent_dim_each, latent_dim_each, latent_dim_each],
         num_relations=num_relations,
         num_bases=4,
+        hid_dim=hparams["hid_dim"],
         regression=True,
         adj_dropout=args.adj_dropout,
         force_undirected=args.force_undirected,
@@ -502,11 +508,18 @@ def get_trainer(args, hparams):
     return trainer_train, trainer_eval, path_dir_ckpt
 
 
-def get_loaders(train_graphs, test_graphs, hparams):
+def get_loaders(train_graphs, val_graphs, test_graphs, hparams):
     train_loader = DataLoader(
         train_graphs,
         hparams["batch_size"],
         shuffle=True,
+        num_workers=hparams["num_workers"],
+        collate_fn=lambda batch: Batch.from_data_list(batch, []),
+    )
+    val_loader = DataLoader(
+        val_graphs,
+        hparams["batch_size"],
+        shuffle=False,
         num_workers=hparams["num_workers"],
         collate_fn=lambda batch: Batch.from_data_list(batch, []),
     )
@@ -518,7 +531,7 @@ def get_loaders(train_graphs, test_graphs, hparams):
         collate_fn=lambda batch: Batch.from_data_list(batch, []),
     )
 
-    return train_loader, test_loader
+    return train_loader, val_loader, test_loader
 
 
 def final_test_model(path_dir_ckpt, model, trainer, test_loader):
@@ -547,4 +560,4 @@ def final_test_model(path_dir_ckpt, model, trainer, test_loader):
     mse = F.mse_loss(mean_preds, trgs.view(-1))
     rmse = torch.sqrt(mse).item()
 
-    logger.info(f"Final ensemble RMSE: {rmse:4f}")
+    return rmse

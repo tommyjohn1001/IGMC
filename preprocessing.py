@@ -119,7 +119,7 @@ def sparse_to_tuple(sparse_mx):
 def create_trainvaltest_split(
     dataset,
     seed=1234,
-    testing=False,
+    tuning=False,
     datasplit_path=None,
     datasplit_from_file=False,
     verbose=True,
@@ -191,10 +191,12 @@ def create_trainvaltest_split(
     all_labels = np.array([rating_dict[r] for r in ratings], dtype=np.int32)
     train_labels = all_labels[0 : int(num_train * ratio)]
     val_labels = all_labels[num_train : num_train + num_val]
-    test_labels = all_labels[num_train + num_val :]    
-    u_train_idx = np.hstack([u_train_idx, u_val_idx])
-    v_train_idx = np.hstack([v_train_idx, v_val_idx])
-    train_labels = np.hstack([train_labels, val_labels])
+    test_labels = all_labels[num_train + num_val :]
+
+    if not tuning:
+        u_train_idx = np.hstack([u_train_idx, u_val_idx])
+        v_train_idx = np.hstack([v_train_idx, v_val_idx])
+        train_labels = np.hstack([train_labels, val_labels])
 
     class_values = np.sort(np.unique(ratings))
 
@@ -226,7 +228,7 @@ def create_trainvaltest_split(
     )
 
 
-def load_data_monti(dataset, testing=False, rating_map=None, post_rating_map=None):
+def load_data_monti(dataset, tuning=False, rating_map=None, post_rating_map=None):
     """
     Loads data from Monti et al. paper.
     if rating_map is given, apply this map to the original rating matrix
@@ -331,11 +333,13 @@ def load_data_monti(dataset, testing=False, rating_map=None, post_rating_map=Non
     val_labels = labels[val_idx]
     test_labels = labels[test_idx]
 
-    u_train_idx = np.hstack([u_train_idx, u_val_idx])
-    v_train_idx = np.hstack([v_train_idx, v_val_idx])
-    train_labels = np.hstack([train_labels, val_labels])
-    # for adjacency matrix construction
-    train_idx = np.hstack([train_idx, val_idx])
+    # NOTE: Since separating train/val/test, this piece of code is disabled
+    if not tuning:
+        u_train_idx = np.hstack([u_train_idx, u_val_idx])
+        v_train_idx = np.hstack([v_train_idx, v_val_idx])
+        train_labels = np.hstack([train_labels, val_labels])
+        # for adjacency matrix construction
+        train_idx = np.hstack([train_idx, val_idx])
 
     class_values = np.sort(np.unique(ratings))
 
@@ -377,7 +381,7 @@ def load_data_monti(dataset, testing=False, rating_map=None, post_rating_map=Non
 
 
 def load_official_trainvaltest_split(
-    dataset, testing=False, rating_map=None, post_rating_map=None, ratio=1.0
+    dataset, tuning=False, rating_map=None, post_rating_map=None, ratio=1.0
 ):
     """
     Loads official train/test split and uses 10% of training samples for validaiton
@@ -511,11 +515,12 @@ def load_official_trainvaltest_split(
     val_labels = labels[val_idx]
     test_labels = labels[test_idx]
 
-    u_train_idx = np.hstack([u_train_idx, u_val_idx])
-    v_train_idx = np.hstack([v_train_idx, v_val_idx])
-    train_labels = np.hstack([train_labels, val_labels])
-    # for adjacency matrix construction
-    train_idx = np.hstack([train_idx, val_idx])
+    if not tuning:
+        u_train_idx = np.hstack([u_train_idx, u_val_idx])
+        v_train_idx = np.hstack([v_train_idx, v_val_idx])
+        train_labels = np.hstack([train_labels, val_labels])
+        # for adjacency matrix construction
+        train_idx = np.hstack([train_idx, val_idx])
 
     class_values = np.sort(np.unique(ratings))
 

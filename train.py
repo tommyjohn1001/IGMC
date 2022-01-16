@@ -21,21 +21,21 @@ if __name__ == "__main__":
         "contrastive": args.contrastive,
         "temperature": 0.1,
         "lr_scheduler": config_dataset["lr_scheduler"],
+        "hid_dim": args.hid_dim,
     }
 
     (
         train_graphs,
+        val_graphs,
         test_graphs,
         u_features,
         v_features,
-        class_values
+        class_values,
     ) = get_train_val_datasets(args)
     print("All ratings are:")
     print(class_values)
 
-    train_loader, test_loader = get_loaders(
-        train_graphs, test_graphs, hparams
-    )
+    train_loader, _, test_loader = get_loaders(train_graphs, val_graphs, test_graphs, hparams)
     model = get_model(args, hparams, train_graphs, u_features, v_features, class_values)
     trainer_train, trainer_eval, path_dir_ckpt = get_trainer(args, hparams)
     lit_model = IGMCLitModel(model, hparams)
@@ -54,4 +54,5 @@ if __name__ == "__main__":
 
     logger.info("Start predicting...")
 
-    final_test_model(path_dir_ckpt, lit_model, trainer_eval, test_loader)
+    rmse = final_test_model(path_dir_ckpt, lit_model, trainer_eval, test_loader)
+    logger.info(f"Final ensemble RMSE: {rmse:4f}")

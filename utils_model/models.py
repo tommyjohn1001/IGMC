@@ -20,6 +20,7 @@ class IGMC(GNN):
         dataset,
         gconv=RGCNConv,
         latent_dim=[32, 32, 32, 32],
+        hid_dim=128,
         num_relations=5,
         num_bases=2,
         regression=False,
@@ -37,7 +38,7 @@ class IGMC(GNN):
         temperature=0.1,
     ):
         super(IGMC, self).__init__(
-            dataset, GCNConv, latent_dim, regression, adj_dropout, force_undirected
+            dataset, GCNConv, latent_dim, regression, adj_dropout, force_undirected, hid_dim
         )
 
         self.batch_size = batch_size
@@ -52,21 +53,21 @@ class IGMC(GNN):
         self.convs.append(gconv(dataset.num_features, latent_dim[0], num_relations, num_bases))
         for i in range(0, len(latent_dim) - 1):
             self.convs.append(gconv(latent_dim[i], latent_dim[i + 1], num_relations, num_bases))
-        self.lin1 = Linear(128, 128)
+        self.lin1 = Linear(hid_dim, hid_dim)
         self.side_features = side_features
         if side_features:
-            self.lin1 = Linear(2 * sum(latent_dim) + n_side_features, 128)
+            self.lin1 = Linear(2 * sum(latent_dim) + n_side_features, hid_dim)
 
         self.max_neighbors = max_neighbors
         self.max_walks = max_walks
-        self.naive_walking_lin1 = nn.Linear(128, self.max_neighbors)
+        self.naive_walking_lin1 = nn.Linear(hid_dim, self.max_neighbors)
         # self.edge_embd = nn.Linear(1, 128)
         # self.lin_embd = nn.Sequential(nn.Linear(256, 256), nn.Tanh())
         # self.lin_embd2 = nn.Linear(256, 128, bias=False)
 
         ## Apply new embedding and LSTMCell instead of simple Linear
-        self.edge_embd = nn.Embedding(num_relations, 128)
-        self.lin_embd = nn.LSTMCell(256, 128)
+        self.edge_embd = nn.Embedding(num_relations, hid_dim)
+        self.lin_embd = nn.LSTMCell(hid_dim * 2, hid_dim)
 
         self.contrastive_criterion = CustomContrastiveLoss(self.temperature, num_relations)
 

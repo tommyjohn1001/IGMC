@@ -7,7 +7,7 @@ from preprocessing import *
 from utils_model.models import *
 
 
-def get_train_val_datasets(args, tuning=False):
+def get_train_val_datasets(args, combine_trainval=False):
     rating_map, post_rating_map = None, None
     if args.standard_rating:
         if args.data_name in ["flixster", "ml_10m"]:  # original 0.5, 1, ..., 5
@@ -50,7 +50,7 @@ def get_train_val_datasets(args, tuning=False):
             test_u_indices,
             test_v_indices,
             class_values,
-        ) = load_data_monti(args.data_name, tuning, rating_map, post_rating_map)
+        ) = load_data_monti(args.data_name, combine_trainval, rating_map, post_rating_map)
     elif args.data_name == "ml_100k":
         print("Using official MovieLens split u1.base/u1.test with 20% validation...")
         (
@@ -68,7 +68,7 @@ def get_train_val_datasets(args, tuning=False):
             test_v_indices,
             class_values,
         ) = load_official_trainvaltest_split(
-            args.data_name, tuning, rating_map, post_rating_map, args.ratio
+            args.data_name, combine_trainval, rating_map, post_rating_map, args.ratio
         )
     else:
         (
@@ -88,7 +88,7 @@ def get_train_val_datasets(args, tuning=False):
         ) = create_trainvaltest_split(
             args.data_name,
             1234,
-            tuning,
+            combine_trainval,
             datasplit_path,
             True,
             True,
@@ -101,7 +101,7 @@ def get_train_val_datasets(args, tuning=False):
     val_indices = (val_u_indices, val_v_indices)
     test_indices = (test_u_indices, test_v_indices)
 
-    mode = "tuning" if tuning is True else "testing"
+    mode = "trainval_test" if combine_trainval is True else "train_val_test"
     dataset_class = "MyDynamicDataset" if args.dynamic_train else "MyDataset"
     train_graphs = getattr(util_functions, dataset_class)(
         f"data/{mode}/{args.data_name}/train",
@@ -143,10 +143,12 @@ def get_train_val_datasets(args, tuning=False):
         max_num=args.max_val_num,
     )
 
-    if not tuning:
-        logger.info(f"Data info: train: {len(train_graphs)} - test: {len(test_graphs)}")
+    if not combine_trainval:
+        logger.info(
+            f"Data info: train: {len(train_graphs)} - val: {len(val_graphs)} - test: {len(test_graphs)}"
+        )
     else:
-        logger.info(f"Data info: train: {len(train_graphs)} - val: {len(val_graphs)}")
+        logger.info(f"Data info: train: {len(train_graphs)} - test: {len(test_graphs)}")
 
     return train_graphs, val_graphs, test_graphs, u_features, v_features, class_values
 
@@ -473,13 +475,13 @@ def get_trainer(args, hparams):
     callback_ckpt = ModelCheckpoint(
         dirpath=path_dir_ckpt,
         filename="{epoch}-{val_loss:.3f}",
-        monitor="epoch",
-        mode="max",
-        save_top_k=5,
-        every_n_epochs=args.save_interval
-        # monitor="val_loss",
-        # mode="min",
+        # monitor="epoch",
+        # mode="max",
         # save_top_k=5,
+        # every_n_epochs=args.save_interval
+        monitor="val_loss",
+        mode="min",
+        save_top_k=3,
         # save_last=True,
     )
     callback_tqdm = TQDMProgressBar(refresh_rate=5)

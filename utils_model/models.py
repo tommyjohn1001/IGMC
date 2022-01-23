@@ -246,12 +246,15 @@ class IGMC(GNN):
         ## ARR loss
         loss_arr = 0
         if self.ARR > 0:
-            for gconv in self.convs:
-                w = torch.matmul(gconv.att, gconv.basis.view(gconv.num_bases, -1)).view(
-                    gconv.num_relations, gconv.in_channels, gconv.out_channels
-                )
-                reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :]) ** 2)
-                loss_arr += reg_loss
+            if isinstance(conv, GATConv):
+                loss_arr = torch.sum((self.edge_embd.weight[1:] - self.edge_embd.weight[:-1]) ** 2)
+            else:
+                for gconv in self.convs:
+                    w = torch.matmul(gconv.att, gconv.basis.view(gconv.num_bases, -1)).view(
+                        gconv.num_relations, gconv.in_channels, gconv.out_channels
+                    )
+                    reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :]) ** 2)
+                    loss_arr += reg_loss
 
         ## Custom Contrastive loss
         loss_contrastive = 0
@@ -338,6 +341,7 @@ class IGMC2(GNN):
         dataset,
         gconv=RGCNConv,
         latent_dim=[32, 32, 32, 32],
+        hid_dim=128,
         num_relations=5,
         num_bases=2,
         regression=False,
@@ -379,21 +383,21 @@ class IGMC2(GNN):
         else:
             raise NotImplementedError()
         # self.lin1 = Linear(2 * sum(latent_dim), 128)
-        self.lin1 = Linear(128, 128)
+        self.lin1 = Linear(hid_dim, hid_dim)
         self.side_features = side_features
         if side_features:
-            self.lin1 = Linear(2 * sum(latent_dim) + n_side_features, 128)
+            self.lin1 = Linear(2 * sum(latent_dim) + n_side_features, hid_dim)
 
         self.max_neighbors = max_neighbors
         self.max_walks = max_walks
-        self.naive_walking_lin1 = nn.Linear(128, self.max_neighbors)
+        self.naive_walking_lin1 = nn.Linear(hid_dim, self.max_neighbors)
         # self.edge_embd = nn.Linear(1, 128)
         # self.lin_embd = nn.Sequential(nn.Linear(256, 256), nn.Tanh())
         # self.lin_embd2 = nn.Linear(256, 128, bias=False)
 
         ## Apply new embedding and LSTMCell instead of simple Linear
-        self.edge_embd = nn.Embedding(num_relations, 128)
-        self.lin_embd = nn.LSTMCell(256, 128)
+        self.edge_embd = nn.Embedding(num_relations, hid_dim)
+        self.lin_embd = nn.LSTMCell(hid_dim * 2, hid_dim)
 
         self.contrastive_criterion = CustomContrastiveLoss(self.temperature, num_relations)
 
@@ -630,12 +634,15 @@ class IGMC2(GNN):
         ## ARR loss
         loss_arr = 0
         if self.ARR > 0:
-            for gconv in self.convs:
-                w = torch.matmul(gconv.att, gconv.basis.view(gconv.num_bases, -1)).view(
-                    gconv.num_relations, gconv.in_channels, gconv.out_channels
-                )
-                reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :]) ** 2)
-                loss_arr += reg_loss
+            if isinstance(conv, GATConv):
+                loss_arr = torch.sum((self.edge_embd.weight[1:] - self.edge_embd.weight[:-1]) ** 2)
+            else:
+                for gconv in self.convs:
+                    w = torch.matmul(gconv.att, gconv.basis.view(gconv.num_bases, -1)).view(
+                        gconv.num_relations, gconv.in_channels, gconv.out_channels
+                    )
+                    reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :]) ** 2)
+                    loss_arr += reg_loss
 
         ## Custom Contrastive loss
         loss_contrastive = 0

@@ -173,7 +173,7 @@ def get_args():
     parser.add_argument(
         "--contrastive",
         type=float,
-        default=0.1,
+        default=0,
         help="Contrastive loss. If not 0, use constrastive loss",
     )
     parser.add_argument(

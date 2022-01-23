@@ -31,7 +31,7 @@ if __name__ == "__main__":
         u_features,
         v_features,
         class_values,
-    ) = get_train_val_datasets(args, combine_trainval=False)
+    ) = get_train_val_datasets(args, combine_trainval=True)
     print("All ratings are:")
     print(class_values)
 

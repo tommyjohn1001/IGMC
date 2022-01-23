@@ -1,52 +1,49 @@
 yahoo_music:
   hop: 1
-  epochs: 200
+  epochs: 350
   batch_size: 64
   max_neighbors: 50
-  save_interval: 8
+  save_interval: 5
   hid_dim: 128
   max_walks: 20
-  ARR: 0.001
   lr_scheduler:
     - range_epoch: 0,100
-      range_lr: 2e-3,2e-3
-    - range_epoch: 100,150
+      range_lr: 1e-3,1e-3
+    - range_epoch: 100,250
       range_lr: 9e-4,9e-4
-    - range_epoch: 150,200
+    - range_epoch: 250,350
       range_lr: 7e-4,7e-4
 
 flixster:
   hop: 1
-  epochs: 200
+  epochs: 350
   batch_size: 64
   max_neighbors: 50
-  save_interval: 8
+  save_interval: 5
   hid_dim: 128
   max_walks: 20
-  ARR: 0.001
   lr_scheduler:
     - range_epoch: 0,100
-      range_lr: 2e-3,2e-3
-    - range_epoch: 100,150
+      range_lr: 1e-3,1e-3
+    - range_epoch: 100,250
       range_lr: 9e-4,9e-4
-    - range_epoch: 150,200
+    - range_epoch: 250,350
       range_lr: 7e-4,7e-4
 
 douban:
   hop: 1
-  epochs: 200
+  epochs: 350
   batch_size: 64
   max_neighbors: 50
-  save_interval: 8
+  save_interval: 5
   hid_dim: 128
   max_walks: 20
-  ARR: 0.001
   lr_scheduler:
     - range_epoch: 0,100
-      range_lr: 2e-3,2e-3
-    - range_epoch: 100,150
+      range_lr: 1e-3,1e-3
+    - range_epoch: 100,250
       range_lr: 9e-4,9e-4
-    - range_epoch: 150,200
+    - range_epoch: 250,350
       range_lr: 7e-4,7e-4
 
 ml_1m:

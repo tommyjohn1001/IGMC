@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from all_packages import *
 from torch.nn import Linear
-from torch_geometric.nn import GCNConv, RGCNConv
+from torch_geometric.nn import GATConv, GCNConv, RGCNConv
 from torch_geometric.utils import dropout_adj
 from util_functions import *
 
@@ -50,9 +50,18 @@ class IGMC(GNN):
         self.class_values = class_values
 
         self.convs = torch.nn.ModuleList()
-        self.convs.append(gconv(dataset.num_features, latent_dim[0], num_relations, num_bases))
-        for i in range(0, len(latent_dim) - 1):
-            self.convs.append(gconv(latent_dim[i], latent_dim[i + 1], num_relations, num_bases))
+        if gconv in [RGCNConv]:
+            self.convs.append(gconv(dataset.num_features, latent_dim[0], num_relations, num_bases))
+            for i in range(0, len(latent_dim) - 1):
+                self.convs.append(
+                    gconv(latent_dim[i], latent_dim[i + 1], num_relations, num_bases)
+                )
+        elif gconv is GATConv:
+            self.convs.append(gconv(dataset.num_features, latent_dim[0], edge_dim=128))
+            for i in range(0, len(latent_dim) - 1):
+                self.convs.append(gconv(latent_dim[i], latent_dim[i + 1], edge_dim=128))
+        else:
+            raise NotImplementedError()
         self.lin1 = Linear(hid_dim, hid_dim)
         self.side_features = side_features
         if side_features:
@@ -177,7 +186,11 @@ class IGMC(GNN):
             )
         concat_states = []
         for conv in self.convs:
-            x = torch.tanh(conv(x, edge_index, edge_type))
+            if isinstance(conv, GATConv):
+                edge_features = self.edge_embd(edge_type)
+                x = torch.tanh(conv(x, edge_index, edge_features))
+            else:
+                x = torch.tanh(conv(x, edge_index, edge_type))
             concat_states.append(x)
         concat_states = torch.cat(concat_states, 1)
 
@@ -353,9 +366,18 @@ class IGMC2(GNN):
 
         self.multiply_by = multiply_by
         self.convs = torch.nn.ModuleList()
-        self.convs.append(gconv(dataset.num_features, latent_dim[0], num_relations, num_bases))
-        for i in range(0, len(latent_dim) - 1):
-            self.convs.append(gconv(latent_dim[i], latent_dim[i + 1], num_relations, num_bases))
+        if gconv in [RGCNConv]:
+            self.convs.append(gconv(dataset.num_features, latent_dim[0], num_relations, num_bases))
+            for i in range(0, len(latent_dim) - 1):
+                self.convs.append(
+                    gconv(latent_dim[i], latent_dim[i + 1], num_relations, num_bases)
+                )
+        elif gconv is GATConv:
+            self.convs.append(gconv(dataset.num_features, latent_dim[0], edge_dim=128))
+            for i in range(0, len(latent_dim) - 1):
+                self.convs.append(gconv(latent_dim[i], latent_dim[i + 1], edge_dim=128))
+        else:
+            raise NotImplementedError()
         # self.lin1 = Linear(2 * sum(latent_dim), 128)
         self.lin1 = Linear(128, 128)
         self.side_features = side_features
@@ -547,7 +569,11 @@ class IGMC2(GNN):
             )
         concat_states = []
         for conv in self.convs:
-            x = torch.tanh(conv(x, edge_index, edge_type))
+            if isinstance(conv, GATConv):
+                edge_features = self.edge_embd(edge_type)
+                x = torch.tanh(conv(x, edge_index, edge_features))
+            else:
+                x = torch.tanh(conv(x, edge_index, edge_type))
             concat_states.append(x)
         concat_states = torch.cat(concat_states, 1)
 

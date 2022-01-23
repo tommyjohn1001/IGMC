@@ -431,6 +431,7 @@ def get_model(args, hparams, train_dataset, u_features, v_features, class_values
     model = eval(model)(
         train_dataset,
         latent_dim=[latent_dim_each, latent_dim_each, latent_dim_each, latent_dim_each],
+        gconv=GATConv,
         num_relations=num_relations,
         num_bases=4,
         hid_dim=hparams["hid_dim"],
@@ -475,13 +476,13 @@ def get_trainer(args, hparams):
     callback_ckpt = ModelCheckpoint(
         dirpath=path_dir_ckpt,
         filename="{epoch}-{val_loss:.3f}",
-        # monitor="epoch",
-        # mode="max",
-        # save_top_k=5,
-        # every_n_epochs=args.save_interval
-        monitor="val_loss",
-        mode="min",
-        save_top_k=3,
+        monitor="epoch",
+        mode="max",
+        save_top_k=5,
+        every_n_epochs=args.save_interval
+        # monitor="val_loss",
+        # mode="min",
+        # save_top_k=3,
         # save_last=True,
     )
     callback_tqdm = TQDMProgressBar(refresh_rate=5)

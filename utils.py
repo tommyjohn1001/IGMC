@@ -431,7 +431,7 @@ def get_model(args, hparams, train_dataset, u_features, v_features, class_values
     model = eval(model)(
         train_dataset,
         latent_dim=[latent_dim_each, latent_dim_each, latent_dim_each, latent_dim_each],
-        gconv=GATConv,
+        # gconv=GATConv,
         num_relations=num_relations,
         num_bases=4,
         hid_dim=hparams["hid_dim"],
@@ -446,7 +446,6 @@ def get_model(args, hparams, train_dataset, u_features, v_features, class_values
         max_walks=args.max_walks,
         class_values=class_values,
         ARR=hparams["ARR"],
-        contrastive=hparams["contrastive"],
         temperature=hparams["temperature"],
     )
 

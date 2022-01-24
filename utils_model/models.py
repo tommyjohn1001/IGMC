@@ -34,7 +34,6 @@ class IGMC(GNN):
         max_walks=10,
         class_values=None,
         ARR=0.01,
-        contrastive=True,
         temperature=0.1,
     ):
         super(IGMC, self).__init__(
@@ -43,7 +42,7 @@ class IGMC(GNN):
 
         self.batch_size = batch_size
         self.ARR = ARR
-        self.contrastive = contrastive
+        self.num_relations = num_relations
         self.temperature = temperature
         self.multiply_by = multiply_by
         self.map_edgetype2id = {v: i for i, v in enumerate(class_values)}
@@ -84,8 +83,16 @@ class IGMC(GNN):
         # x: [n_nodes, 128]
         # edge_index: [2: n_edges]
 
-        ## Do something to get start and end nodes
-        bz = x.shape[0]
+        # Get
+        edge_embeddings = []
+        for gconv in self.convs:
+            w = torch.matmul(gconv.att, gconv.basis.view(gconv.num_bases, -1)).view(
+                gconv.num_relations, gconv.in_channels, gconv.out_channels
+            )
+            # [n_relations, n_in, n_out]
+            edge_embeddings.append(w.mean(1))
+        edge_embeddings = torch.cat(edge_embeddings, -1)
+        # [n_relations, 128]
 
         ## start looping
 
@@ -93,7 +100,6 @@ class IGMC(GNN):
         node = start_node
         traversed_node = set([node.item()])
         accumulated = x[node]
-        accumulated_nodes = []
         is_reaching_target = False
         h, c = 0, 0
         while not is_reaching_target and n_walks < max_walks:
@@ -131,7 +137,10 @@ class IGMC(GNN):
             selected_node = neighbors[selected_neighbor]
             selected_node_embd = x[selected_node].unsqueeze(0)
             selected_edge_type = edge_type_[selected_neighbor]
-            selected_edge_embd = self.edge_embd(selected_edge_type.unsqueeze(0))
+            selected_edge_type = F.one_hot(
+                selected_edge_type.unsqueeze(0), self.num_relations
+            ).float()
+            selected_edge_embd = selected_edge_type @ edge_embeddings
 
             ## dùng cơ chế cộng để accumulate hoặc áp dụng memorynet
             total = torch.cat((selected_node_embd, selected_edge_embd), -1)
@@ -256,21 +265,12 @@ class IGMC(GNN):
                     reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :]) ** 2)
                     loss_arr += reg_loss
 
-        ## Custom Contrastive loss
-        loss_contrastive = 0
-        if self.contrastive > 0:
-            edgetype_indx = [self.map_edgetype2id[edgetype.item()] for edgetype in data.y]
-            edgetype_indx = torch.tensor(edgetype_indx, dtype=torch.int64, device=data.y.device)
-            loss_contrastive = self.contrastive_criterion(
-                self.edge_embd.weight, x_128, edgetype_indx
-            )
-
-        loss = loss_mse + self.ARR * loss_arr + self.contrastive * loss_contrastive
+        loss = loss_mse + self.ARR * loss_arr
         if torch.isnan(loss):
-            print(f"NaN: {loss_mse} - {loss_arr} - {loss_contrastive}")
+            print(f"NaN: {loss_mse} - {loss_arr}")
             sys.exit(1)
         if loss < 0:
-            print(f"below 0: {loss_mse} - {loss_arr} - {loss_contrastive}")
+            print(f"below 0: {loss_mse} - {loss_arr}")
 
         return x[:, 0], loss
 
@@ -355,7 +355,6 @@ class IGMC2(GNN):
         max_walks=10,
         class_values=None,
         ARR=0.01,
-        contrastive=True,
         temperature=0.1,
     ):
         super(IGMC2, self).__init__(
@@ -364,7 +363,7 @@ class IGMC2(GNN):
 
         self.batch_size = batch_size
         self.ARR = ARR
-        self.contrastive = contrastive
+        self.num_relations = num_relations
         self.temperature = temperature
         self.map_edgetype2id = {v: i for i, v in enumerate(class_values)}
 
@@ -396,7 +395,6 @@ class IGMC2(GNN):
         # self.lin_embd2 = nn.Linear(256, 128, bias=False)
 
         ## Apply new embedding and LSTMCell instead of simple Linear
-        self.edge_embd = nn.Embedding(num_relations, hid_dim)
         self.lin_embd = nn.LSTMCell(hid_dim * 2, hid_dim)
 
         self.contrastive_criterion = CustomContrastiveLoss(self.temperature, num_relations)
@@ -406,6 +404,15 @@ class IGMC2(GNN):
         # edge_index: [2: n_edges]
 
         ## Do something to get start and end nodes
+        edge_embeddings = []
+        for gconv in self.convs:
+            w = torch.matmul(gconv.att, gconv.basis.view(gconv.num_bases, -1)).view(
+                gconv.num_relations, gconv.in_channels, gconv.out_channels
+            )
+            # [n_relations, n_in, n_out]
+            edge_embeddings.append(w.mean(1))
+        edge_embeddings = torch.cat(edge_embeddings, -1)
+        # [n_relations, 128]
 
         ## start looping
 
@@ -515,7 +522,10 @@ class IGMC2(GNN):
             selected_neighbor_softmax = selected_neighbor_softmax.unsqueeze(0)
             selected_node_embd = selected_neighbor_softmax @ x_neighbors
             selected_edge_type = edge_type_[selected_neighbor]
-            selected_edge_embd = self.edge_embd(selected_edge_type.unsqueeze(0))
+            selected_edge_type = F.one_hot(
+                selected_edge_type.unsqueeze(0), self.num_relations
+            ).float()
+            selected_edge_embd = selected_edge_type @ edge_embeddings
 
             ## dùng cơ chế cộng để accumulate hoặc áp dụng memorynet
             total = torch.cat((selected_node_embd, selected_edge_embd), -1)
@@ -644,21 +654,12 @@ class IGMC2(GNN):
                     reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :]) ** 2)
                     loss_arr += reg_loss
 
-        ## Custom Contrastive loss
-        loss_contrastive = 0
-        if self.contrastive > 0:
-            edgetype_indx = [self.map_edgetype2id[edgetype.item()] for edgetype in data.y]
-            edgetype_indx = torch.tensor(edgetype_indx, dtype=torch.int64, device=data.y.device)
-            loss_contrastive = self.contrastive_criterion(
-                self.edge_embd.weight, x_128, edgetype_indx
-            )
-
-        loss = loss_mse + self.ARR * loss_arr + self.contrastive * loss_contrastive
+        loss = loss_mse + self.ARR * loss_arr
         if torch.isnan(loss):
-            print(f"NaN: {loss_mse} - {loss_arr} - {loss_contrastive}")
-            exit(1)
+            print(f"NaN: {loss_mse} - {loss_arr}")
+            sys.exit(1)
         if loss < 0:
-            print(f"below 0: {loss_mse} - {loss_arr} - {loss_contrastive}")
+            print(f"below 0: {loss_mse} - {loss_arr}")
 
         return x[:, 0], loss
 

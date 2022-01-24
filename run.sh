@@ -14,16 +14,16 @@
 ## 2. Train
 
 ## Train with dataset Flixster
-# python train.py --data-name flixster --exp_name nrw -g 0 --wandb --version 1
+# python train.py --data-name flixster --exp_name nrw -g 0 --wandb --version 1 --combine_trainval
 
-# python train.py --data-name douban --exp_name nrw -g 0 --wandb --version 1
+# python train.py --data-name douban --exp_name nrw -g 0 --wandb --version 1 --combine_trainval
 
-# python train.py --data-name yahoo_music --exp_name nrw -g 1 --wandb --version 1
+# python train.py --data-name yahoo_music --exp_name nrw -g 1 --wandb --version 1 --combine_trainval
 
 ## Train with dataset MovieLens-100k
-# python train.py --data-name ml_100k --exp_name nrw -g 0 --wandb --version 1
+# python train.py --data-name ml_100k --exp_name nrw -g 0 --wandb --version 1 --combine_trainval
 
-# python train.py --data-name ml_1m --exp_name nrw -g 0 --wandb --version 1
+# python train.py --data-name ml_1m --exp_name nrw -g 0 --wandb --version 1 --combine_trainval
 
 
 ## 3. Tune

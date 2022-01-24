@@ -162,6 +162,7 @@ def get_args():
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--predict", action="store_true")
     parser.add_argument("--superpod", action="store_true")
+    parser.add_argument("--combine_trainval", action='store_true')
     parser.add_argument(
         "--ARR",
         type=float,

@@ -1,6 +1,6 @@
 yahoo_music:
   hop: 1
-  epochs: 350
+  epochs: 250
   batch_size: 64
   max_neighbors: 50
   save_interval: 5
@@ -9,14 +9,14 @@ yahoo_music:
   lr_scheduler:
     - range_epoch: 0,100
       range_lr: 1e-3,1e-3
-    - range_epoch: 100,250
-      range_lr: 9e-4,9e-4
-    - range_epoch: 250,350
-      range_lr: 7e-4,7e-4
+    - range_epoch: 100,150
+      range_lr: 8e-4,8e-4
+    - range_epoch: 150,250
+      range_lr: 6e-4,6e-4
 
 flixster:
   hop: 1
-  epochs: 350
+  epochs: 250
   batch_size: 64
   max_neighbors: 50
   save_interval: 5
@@ -25,14 +25,14 @@ flixster:
   lr_scheduler:
     - range_epoch: 0,100
       range_lr: 1e-3,1e-3
-    - range_epoch: 100,250
-      range_lr: 9e-4,9e-4
-    - range_epoch: 250,350
-      range_lr: 7e-4,7e-4
+    - range_epoch: 100,150
+      range_lr: 8e-4,8e-4
+    - range_epoch: 150,250
+      range_lr: 6e-4,6e-4
 
 douban:
   hop: 1
-  epochs: 350
+  epochs: 250
   batch_size: 64
   max_neighbors: 50
   save_interval: 5
@@ -41,14 +41,12 @@ douban:
   lr_scheduler:
     - range_epoch: 0,100
       range_lr: 1e-3,1e-3
-    - range_epoch: 100,250
-      range_lr: 9e-4,9e-4
-    - range_epoch: 250,350
-      range_lr: 7e-4,7e-4
+    - range_epoch: 100,150
+      range_lr: 8e-4,8e-4
+    - range_epoch: 150,250
+      range_lr: 6e-4,6e-4
 
 ml_1m:
-  save_appendix: _mnhp100
-  data_appendix: _mnph100
   max_nodes_per_hop: 100
   epochs: 200
   batch_size: 64
@@ -69,8 +67,6 @@ ml_1m:
       range_lr: 4e-4,4e-4
 
 ml_100k:
-  save_appendix: _mnph200
-  data_appendix: _mnph100
   max_nodes_per_hop: 200
   epochs: 200
   batch_size: 64

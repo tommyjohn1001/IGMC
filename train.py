@@ -31,7 +31,7 @@ if __name__ == "__main__":
         u_features,
         v_features,
         class_values,
-    ) = get_train_val_datasets(args, combine_trainval=True)
+    ) = get_train_val_datasets(args, combine_trainval=args.combine_trainval)
     print("All ratings are:")
     print(class_values)
 
@@ -48,7 +48,7 @@ if __name__ == "__main__":
         trainer_train.fit(
             lit_model,
             train_dataloaders=train_loader,
-            val_dataloaders=val_loader,
+            val_dataloaders=val_loader if not args.combine_trainval else test_loader,
             ckpt_path=args.ckpt,
         )
     else:

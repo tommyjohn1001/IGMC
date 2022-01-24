@@ -193,7 +193,7 @@ def create_trainvaltest_split(
     val_labels = all_labels[num_train : num_train + num_val]
     test_labels = all_labels[num_train + num_val :]
 
-    if not combine_trainval:
+    if combine_trainval:
         u_train_idx = np.hstack([u_train_idx, u_val_idx])
         v_train_idx = np.hstack([v_train_idx, v_val_idx])
         train_labels = np.hstack([train_labels, val_labels])
@@ -334,7 +334,7 @@ def load_data_monti(dataset, combine_trainval=False, rating_map=None, post_ratin
     test_labels = labels[test_idx]
 
     # NOTE: Since separating train/val/test, this piece of code is disabled
-    if not combine_trainval:
+    if combine_trainval:
         u_train_idx = np.hstack([u_train_idx, u_val_idx])
         v_train_idx = np.hstack([v_train_idx, v_val_idx])
         train_labels = np.hstack([train_labels, val_labels])
@@ -515,7 +515,7 @@ def load_official_trainvaltest_split(
     val_labels = labels[val_idx]
     test_labels = labels[test_idx]
 
-    if not combine_trainval:
+    if combine_trainval:
         u_train_idx = np.hstack([u_train_idx, u_val_idx])
         v_train_idx = np.hstack([v_train_idx, v_val_idx])
         train_labels = np.hstack([train_labels, val_labels])

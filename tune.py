@@ -40,7 +40,7 @@ def objective(trial: optuna.trial.Trial) -> float:
         u_features,
         v_features,
         class_values,
-    ) = get_train_val_datasets(args, combine_trainval=True)
+    ) = get_train_val_datasets(args, combine_trainval=False)
 
     train_loader, val_loader, _ = get_loaders(train_graphs, val_graphs, test_graphs, hparams)
     model = get_model(args, hparams, train_graphs, u_features, v_features, class_values)

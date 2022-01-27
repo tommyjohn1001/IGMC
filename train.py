@@ -11,7 +11,7 @@ if __name__ == "__main__":
 
     hparams = {
         "batch_size": args.batch_size,
-        "num_workers": 10,
+        "num_workers": 4,
         "lr": args.lr,
         "max_epochs": args.epochs,
         "gradient_clip_val": 0,

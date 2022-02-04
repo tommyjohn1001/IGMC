@@ -25,7 +25,7 @@ flixster:
 
 douban:
   hop: 1
-  epochs: 200
+  epochs: 80
   batch_size: 64
   max_neighbors: 50
   save_interval: 5
@@ -35,11 +35,6 @@ douban:
   lr_scheduler:
     - range_epoch: 0,100
       range_lr: 1e-3,1e-3
-    - range_epoch: 100,150
-      range_lr: 8e-4,8e-4
-    - range_epoch: 150,200
-      range_lr: 6e-4,6e-4
-
 ml_1m:
   max_nodes_per_hop: 100
   epochs: 200

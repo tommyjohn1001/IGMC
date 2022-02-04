@@ -479,7 +479,7 @@ def load_official_trainvaltest_split(dataset, testing=False, rating_map=None, po
                          'Film-Noir', 'Horror', 'Musical', 'Mystery', 'Romance', 'Sci-Fi',
                          'Thriller', 'War', 'Western']
         movie_df = pd.read_csv(movie_file, sep=sep, header=None,
-                               names=movie_headers, engine='python')
+                               names=movie_headers, engine='python', encoding="ISO-8859-1",)
 
         genre_headers = movie_df.columns.values[6:]
         num_genres = genre_headers.shape[0]
@@ -496,7 +496,7 @@ def load_official_trainvaltest_split(dataset, testing=False, rating_map=None, po
         users_file = 'raw_data/' + dataset + '/u.user'
         users_headers = ['user id', 'age', 'gender', 'occupation', 'zip code']
         users_df = pd.read_csv(users_file, sep=sep, header=None,
-                               names=users_headers, engine='python')
+                               names=users_headers, engine='python', encoding="ISO-8859-1",)
 
         occupation = set(users_df['occupation'].values.tolist())
 
@@ -526,7 +526,7 @@ def load_official_trainvaltest_split(dataset, testing=False, rating_map=None, po
 
         movies_headers = ['movie_id', 'title', 'genre']
         movies_df = pd.read_csv(movies_file, sep=sep, header=None,
-                                names=movies_headers, engine='python')
+                                names=movies_headers, engine='python', encoding="ISO-8859-1")
 
         # extracting all genres
         genres = []
@@ -551,7 +551,7 @@ def load_official_trainvaltest_split(dataset, testing=False, rating_map=None, po
         users_file = 'raw_data/' + dataset + '/users.dat'
         users_headers = ['user_id', 'gender', 'age', 'occupation', 'zip-code']
         users_df = pd.read_csv(users_file, sep=sep, header=None,
-                               names=users_headers, engine='python')
+                               names=users_headers, engine='python', encoding="ISO-8859-1")
 
         # extracting all features
         cols = users_df.columns.values[1:]

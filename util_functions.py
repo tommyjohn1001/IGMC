@@ -77,7 +77,7 @@ class SparseColIndexer:
 
 class MyDataset(InMemoryDataset):
     def __init__(self, root, A, links, labels, h, sample_ratio, max_nodes_per_hop, 
-                 u_features, v_features, class_values, max_num=None, parallel=True):
+                 u_features, v_features, class_values, pe_dim, max_num=None, parallel=True):
         self.Arow = SparseRowIndexer(A)
         self.Acol = SparseColIndexer(A.tocsc())
         self.links = links
@@ -90,6 +90,7 @@ class MyDataset(InMemoryDataset):
         self.class_values = class_values
         self.parallel = parallel
         self.max_num = max_num
+        self.pe_dim = pe_dim
         if max_num is not None:
             np.random.seed(123)
             num_links = len(links[0])
@@ -110,9 +111,11 @@ class MyDataset(InMemoryDataset):
     def process(self):
         # Extract enclosing subgraphs and save to disk
         data_list = links2subgraphs(self.Arow, self.Acol, self.links, self.labels, self.h, 
-                                    self.sample_ratio, self.max_nodes_per_hop, 
+                                    self.pe_dim, self.sample_ratio, self.max_nodes_per_hop, 
                                     self.u_features, self.v_features, 
                                     self.class_values, self.parallel)
+
+        # torch.save(data_list, "subgraphs_.pkl")
 
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[0])
@@ -121,7 +124,7 @@ class MyDataset(InMemoryDataset):
 
 class MyDynamicDataset(Dataset):
     def __init__(self, root, A, links, labels, h, sample_ratio, max_nodes_per_hop, 
-                 u_features, v_features, class_values, max_num=None):
+                 u_features, v_features, class_values, pe_dim, max_num=None):
         super(MyDynamicDataset, self).__init__(root)
         self.Arow = SparseRowIndexer(A)
         self.Acol = SparseColIndexer(A.tocsc())
@@ -133,6 +136,7 @@ class MyDynamicDataset(Dataset):
         self.u_features = u_features
         self.v_features = v_features
         self.class_values = class_values
+        self.pe_dim = pe_dim
         if max_num is not None:
             np.random.seed(123)
             num_links = len(links[0])
@@ -151,14 +155,15 @@ class MyDynamicDataset(Dataset):
             (i, j), self.Arow, self.Acol, self.h, self.sample_ratio, self.max_nodes_per_hop, 
             self.u_features, self.v_features, self.class_values, g_label
         )
-        return construct_pyg_graph(*tmp)
+        return construct_pyg_graph(*tmp, self.pe_dim)
 
 
 def links2subgraphs(Arow, 
                     Acol, 
                     links, 
                     labels, 
-                    h=1, 
+                    h=1,
+                    pe_dim=1, 
                     sample_ratio=1.0, 
                     max_nodes_per_hop=None, 
                     u_features=None, 
@@ -175,7 +180,7 @@ def links2subgraphs(Arow,
                     (i, j), Arow, Acol, h, sample_ratio, max_nodes_per_hop, u_features, 
                     v_features, class_values, g_label
                 )
-                data = construct_pyg_graph(*tmp)
+                data = construct_pyg_graph(*tmp, pe_dim)
                 g_list.append(data)
                 pbar.update(1)
     else:
@@ -206,7 +211,7 @@ def links2subgraphs(Arow,
         pbar = tqdm(total=len(results))
         while results:
             tmp = results.pop()
-            g_list.append(construct_pyg_graph(*tmp))
+            g_list.append(construct_pyg_graph(*tmp, pe_dim))
             pbar.update(1)
         pbar.close()
         end2 = time.time()
@@ -316,7 +321,7 @@ def init_positional_encoding(g, pos_enc_dim):
 
     
 
-def construct_pyg_graph(u, v, r, node_labels, max_node_label, y, node_features):
+def construct_pyg_graph(u, v, r, node_labels, max_node_label, y, node_features, pos_enc_dim):
     u, v = torch.LongTensor(u), torch.LongTensor(v)
     r = torch.LongTensor(r)  
     edge_index = torch.stack([torch.cat([u, v]), torch.cat([v, u])], 0)
@@ -335,7 +340,7 @@ def construct_pyg_graph(u, v, r, node_labels, max_node_label, y, node_features):
             data.x = torch.cat([data.x, x2], 1)
 
     ## Add PE info
-    init_positional_encoding(data, pos_enc_dim=20)
+    init_positional_encoding(data, pos_enc_dim=pos_enc_dim)
 
     return data
 

@@ -85,6 +85,7 @@ parser.add_argument('--keep-old', action='store_true', default=False,
 parser.add_argument('--save-interval', type=int, default=10,
                     help='save model states every # epochs ')
 # subgraph extraction settings
+parser.add_argument('--pe-dim', type=int, default=20)
 parser.add_argument('--hop', default=1, metavar='S', 
                     help='enclosing subgraph hop number')
 parser.add_argument('--sample-ratio', type=float, default=1.0, 
@@ -316,7 +317,8 @@ train_graphs = eval(dataset_class)(
     args.max_nodes_per_hop, 
     u_features, 
     v_features, 
-    class_values, 
+    class_values,
+    args.pe_dim, 
     max_num=args.max_train_num
 )
 dataset_class = 'MyDynamicDataset' if args.dynamic_test else 'MyDataset'
@@ -330,7 +332,8 @@ test_graphs = eval(dataset_class)(
     args.max_nodes_per_hop, 
     u_features, 
     v_features, 
-    class_values, 
+    class_values,
+    args.pe_dim, 
     max_num=args.max_test_num
 )
 if not args.testing:
@@ -345,7 +348,8 @@ if not args.testing:
         args.max_nodes_per_hop, 
         u_features, 
         v_features, 
-        class_values, 
+        class_values,
+        args.pe_dim, 
         max_num=args.max_val_num
     )
 
@@ -396,7 +400,8 @@ else:
         force_undirected=args.force_undirected, 
         side_features=args.use_features, 
         n_side_features=n_features, 
-        multiply_by=multiply_by
+        multiply_by=multiply_by,
+        pe_dim=args.pe_dim,
     )
     total_params = sum(p.numel() for param in model.parameters() for p in param)
     print(f'Total number of parameters is {total_params}')

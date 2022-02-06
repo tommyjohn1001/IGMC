@@ -1,10 +1,8 @@
-IGMC -- Inductive Graph-based Matrix Completion
-===============================================================================
+# IGMC -- Inductive Graph-based Matrix Completion
 
 ![alt text](https://github.com/muhanzhang/IGMC/raw/master/overall2.svg?sanitize=true "Illustration of IGMC")
 
-Update
-------
+## Update
 
 9/23/2021: Create a "latest" branch to enable running IGMC with latest PyG versions.
 
@@ -12,16 +10,15 @@ Update
 
 8/27/2020: Significantly improved the subgraph extraction speed. With an 8-core machine, now it only takes 30 seconds and 10 minutes to extract subgraphs for ml_100k and ml_1m, respectively. Using --dynamic-dataset also shows about 50% speed-up.
 
-About
------
+## About
 
-IGMC is an __inductive__ matrix completion model based on graph neural networks __without__ using any side information. Traditional matrix factorization approaches factorize the (rating) matrix into the product of low-dimensional latent embeddings of rows (users) and columns (items), which are __transductive__ since the learned embeddings cannot generalize to unseen rows/columns or to new matrices. To make matrix completion __inductive__, content (side information), such as user's age or movie's genre, has to be used previously. However, high-quality content is not always available, and can be hard to extract. Under the extreme setting where __not any__ side information is available other than the matrix to complete, can we still learn an inductive matrix completion model? IGMC achieves this by training a graph neural network (GNN) based purely on local subgraphs around (user, item) pairs extracted from the bipartite graph formed by the rating matrix, and maps these subgraphs to their corresponding ratings. It does not rely on any global information specific to the rating matrix or the task, nor does it learn embeddings specific to the observed users/items. Thus, IGMC is a completely inductive model. 
+IGMC is an **inductive** matrix completion model based on graph neural networks **without** using any side information. Traditional matrix factorization approaches factorize the (rating) matrix into the product of low-dimensional latent embeddings of rows (users) and columns (items), which are **transductive** since the learned embeddings cannot generalize to unseen rows/columns or to new matrices. To make matrix completion **inductive**, content (side information), such as user's age or movie's genre, has to be used previously. However, high-quality content is not always available, and can be hard to extract. Under the extreme setting where **not any** side information is available other than the matrix to complete, can we still learn an inductive matrix completion model? IGMC achieves this by training a graph neural network (GNN) based purely on local subgraphs around (user, item) pairs extracted from the bipartite graph formed by the rating matrix, and maps these subgraphs to their corresponding ratings. It does not rely on any global information specific to the rating matrix or the task, nor does it learn embeddings specific to the observed users/items. Thus, IGMC is a completely inductive model.
 
-Since IGMC is inductive, it can generalize to users/items unseen during the training (given that their interactions exist), and can even __transfer__ to new tasks. Our transfer learning experiments show that a model trained out of the MovieLens dataset can be directly used to predict Douban movie ratings and works surprisingly well. For more information, please check our paper:
+Since IGMC is inductive, it can generalize to users/items unseen during the training (given that their interactions exist), and can even **transfer** to new tasks. Our transfer learning experiments show that a model trained out of the MovieLens dataset can be directly used to predict Douban movie ratings and works surprisingly well. For more information, please check our paper:
+
 > M. Zhang and Y. Chen, Inductive Matrix Completion Based on Graph Neural Networks. [\[PDF\]](https://openreview.net/pdf?id=ByxxgCEYDS)
 
-Requirements
-------------
+## Requirements
 
 Stable version: Python 3.8.1 + PyTorch 1.4.0 + PyTorch_Geometric 1.4.2. If your PyG version is higher than this, please refer to [#7](https://github.com/muhanzhang/IGMC/issues/7).
 
@@ -33,8 +30,7 @@ Install [PyTorch_Geometric](https://rusty1s.github.io/pytorch_geometric/build/ht
 
 Other required python libraries: numpy, scipy, pandas, h5py, networkx, tqdm etc.
 
-Usages
-------
+## Usages
 
 ### Flixster, Douban and YahooMusic
 
@@ -42,7 +38,7 @@ To train on Flixster, type:
 
     python Main.py --data-name flixster --epochs 40 --testing --ensemble
 
-The results will be saved in "results/flixster\_testmode/". The processed enclosing subgraphs will be saved in "data/flixster/testmode/". Change flixster to douban or yahoo\_music to do the same experiments on Douban and YahooMusic datasets, respectively. Delete --testing to evaluate on a validation set to do hyperparameter tuning.
+The results will be saved in "results/flixster_testmode/". The processed enclosing subgraphs will be saved in "data/flixster/testmode/". Change flixster to douban or yahoo_music to do the same experiments on Douban and YahooMusic datasets, respectively. Delete --testing to evaluate on a validation set to do hyperparameter tuning.
 
 ### MovieLens-100K and MovieLens-1M
 
@@ -52,10 +48,10 @@ To train on MovieLens-100K, type:
 
 where the --max-nodes-per-hop argument specifies the maximum number of neighbors to sample for each node during the enclosing subgraph extraction, whose purpose is to limit the subgraph size to accomodate large datasets. The --dynamic-train option makes the training enclosing subgraphs dynamically generated rather than generated in a preprocessing step and saved in disk, whose purpose is to reduce memory consumption. However, you may remove the option to generate a static dataset for future reuses. Append "--dynamic-test" to make the test dataset also dynamic. The default batch size is 50, if a batch cannot fit into your GPU memory, you can reduce batch size by appending "--batch-size 25" to the above command.
 
-The results will be saved in "results/ml\_100k\_mnph200\_testmode/". The processed enclosing subgraphs will be saved in "data/ml\_100k\_mnph200/testmode/" if you do not use dynamic datasets. 
+The results will be saved in "results/ml_100k_mnph200_testmode/". The processed enclosing subgraphs will be saved in "data/ml_100k_mnph200/testmode/" if you do not use dynamic datasets.
 
 To train on MovieLens-1M, type:
-    
+
     python Main.py --data-name ml_1m --save-appendix _mnhp100 --data-appendix _mnph100 --max-nodes-per-hop 100 --testing --epochs 40 --save-interval 5 --adj-dropout 0 --lr-decay-step-size 20 --ensemble --dynamic-train
 
 ### Sparse rating matrix
@@ -80,12 +76,11 @@ After training a model on a dataset, to visualize the testing enclosing subgraph
 
     python Main.py --data-name flixster --epochs 40 --testing --no-train --visualize
 
-It will load "results/flixster\_testmode/model\_checkpoint40.pth" and save the visualization in "results/flixster\_testmode/visualization_flixster_prediction.pdf".
+It will load "results/flixster_testmode/model_checkpoint40.pth" and save the visualization in "results/flixster_testmode/visualization_flixster_prediction.pdf".
 
-Check "Main.py" and "train\_eval.py" for more options to play with. Check "models.py" for the graph neural network used.
+Check "Main.py" and "train_eval.py" for more options to play with. Check "models.py" for the graph neural network used.
 
-Reference
----------
+## Reference
 
 If you find the code useful, please cite our paper.
 
@@ -98,8 +93,15 @@ If you find the code useful, please cite our paper.
       url={https://openreview.net/forum?id=ByxxgCEYDS}
     }
 
-Check out our another successful work of inductive [link prediction](https://github.com/muhanzhang/SEAL). 
+Check out our another successful work of inductive [link prediction](https://github.com/muhanzhang/SEAL).
 
 Muhan Zhang, Washington University in St. Louis
 muhan@wustl.edu
 10/13/2019
+
+---
+
+## README by Hoang Le
+
+- To yield `subgraphs_*.pkl` file, enable line **118** in file `util_functions.py`
+- TO visualize things, code in file `notebooks/some_utils.ipynb`

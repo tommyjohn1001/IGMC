@@ -41,11 +41,11 @@ for dataset in ["yahoo_music", "douban", "flixster", "ml100k", "ml1M"]:
     for ith, seed_val in enumerate(seeds):
         logger.info(f"Test: {ith} - {dataset} - seed: {seed_val:3d}")
         if dataset == "ml100k":
-            ml100k(ith, seed_val, pe_dims[dataset])
+            ml100k(ith, seed_val, pe_dims[dataset], scenario)
         elif dataset == "ml1M":
-            ml1M(ith, seed_val, pe_dims[dataset])
+            ml1M(ith, seed_val, pe_dims[dataset], scenario)
         else:
-            flix_dou_yah(dataset, ith, seed_val, pe_dims[dataset])
+            flix_dou_yah(dataset, ith, seed_val, pe_dims[dataset], scenario)
 
 
 # python Main.py --data-name yahoo_music --epochs 40 --testing --ensemble --save-appendix _RWPE_80 --data-appendix _RWPE_80 --seed 42 --pe-dim 80

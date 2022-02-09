@@ -257,6 +257,7 @@ def subgraph_extraction_labeling(ind, Arow, Acol, h=1, sample_ratio=1.0, max_nod
     r = r - 1  # transform r back to rating label
     num_nodes = len(u_nodes) + len(v_nodes)
     node_labels = [x*2 for x in u_dist] + [x*2+1 for x in v_dist]
+    node_index = u_nodes + v_nodes
     max_node_label = 2*h + 1
     y = class_values[y]
     
@@ -288,7 +289,7 @@ def subgraph_extraction_labeling(ind, Arow, Acol, h=1, sample_ratio=1.0, max_nod
         if u_features is not None and v_features is not None:
             node_features = [u_features[0], v_features[0]]
             
-    return u, v, r, node_labels, max_node_label, y, node_features
+    return u, v, r, node_labels, max_node_label, y, node_features, node_index
 
 
 def init_positional_encoding(g, pos_enc_dim):
@@ -321,14 +322,19 @@ def init_positional_encoding(g, pos_enc_dim):
 
     
 
-def construct_pyg_graph(u, v, r, node_labels, max_node_label, y, node_features, pos_enc_dim):
+def construct_pyg_graph(u, v, r, node_labels, max_node_label, y, node_features, node_index, pos_enc_dim):
+    # TODO: Append node index of each node in u, v, node index is fetched from u_nodes, v_nodes to append to node_feat
     u, v = torch.LongTensor(u), torch.LongTensor(v)
-    r = torch.LongTensor(r)  
+    r = torch.LongTensor(r)
+    node_index = torch.LongTensor(node_index)
     edge_index = torch.stack([torch.cat([u, v]), torch.cat([v, u])], 0)
     edge_type = torch.cat([r, r])
     x = torch.FloatTensor(one_hot(node_labels, max_node_label+1))
     y = torch.FloatTensor([y])
     data = Data(x, edge_index, edge_type=edge_type, y=y)
+
+    ## Concate with node index
+    data.x = torch.cat([node_index.unsqueeze(-1), data.x], 1)
 
     if node_features is not None:
         if type(node_features) == list:  # a list of u_feature and v_feature

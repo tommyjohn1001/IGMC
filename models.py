@@ -173,19 +173,26 @@ class IGMC(GNN):
     def __init__(self, dataset, gconv=RGCNConv, latent_dim=[32, 32, 32, 32], 
                  num_relations=5, num_bases=2, regression=False, adj_dropout=0.2, 
                  force_undirected=False, side_features=False, n_side_features=0, 
-                 multiply_by=1, pe_dim=20):
+                 multiply_by=1, pe_dim=20, n_nodes=3000):
         super(IGMC, self).__init__(
             dataset, GCNConv, latent_dim, regression, adj_dropout, force_undirected
         )
         self.multiply_by = multiply_by
         self.convs = torch.nn.ModuleList()
-        self.convs.append(gconv(dataset.num_features, latent_dim[0], num_relations, num_bases))
+        # self.convs.append(gconv(dataset.num_features, latent_dim[0], num_relations, num_bases))
         # NOTE: If for the 3rd scenario, use the followings instead of the above
-        # self.node_feat_dim = dataset.num_features - pe_dim
-        # self.lin_node_feat = nn.Linear(self.node_feat_dim, latent_dim[0]//2)
-        # self.lin_pe = nn.Linear(pe_dim, latent_dim[0]//2)
-        # self.convs.append(gconv(latent_dim[0], latent_dim[0], num_relations, num_bases))
+        self.node_feat_dim = dataset.num_features - pe_dim
+        self.lin_node_feat = nn.Linear(self.node_feat_dim, 64)
+        self.lin_pe = nn.Linear(pe_dim, 64)
+        self.node_embds = nn.Embedding(n_nodes, 64)
+        self.ff1 = nn.Sequential(
+            nn.Linear(64 * 3, 64*3),
+            nn.Dropout(0.2),
+            nn.Tanh(),
+            nn.Linear(64 * 3, latent_dim[0])
+        )
 
+        self.convs.append(gconv(latent_dim[0], latent_dim[0], num_relations, num_bases))
         for i in range(0, len(latent_dim)-1):
             self.convs.append(gconv(latent_dim[i], latent_dim[i+1], num_relations, num_bases))
         self.lin1 = Linear(2*sum(latent_dim), 128)
@@ -204,9 +211,12 @@ class IGMC(GNN):
             )
 
         # NOTE: If for the 3rd scenario, enable the followings
-        # node_feat, pe = x[:self.node_feat_dim], x[self.node_feat_dim:]
-        # node_feat, pe = self.lin_node_feat(node_feat), self.lin_pe(pe)
-        # x = torch.cat((node_feat, pe), dim=-1)
+        node_indx, node_subgraph_feat, pe = x[:1], x[1:self.node_feat_dim], x[self.node_feat_dim:]
+        node_subgraph_feat = self.lin_node_feat(node_subgraph_feat)
+        pe = self.lin_pe(pe)
+        node_global_feat = self.node_embds(node_indx)
+        x = torch.cat((node_subgraph_feat, pe, node_global_feat), dim=-1)
+        x = self.ff1(x)
 
         concat_states = []
         for conv in self.convs:

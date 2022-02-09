@@ -230,7 +230,7 @@ if args.data_name in ['flixster', 'douban', 'yahoo_music']:
     (
         u_features, v_features, adj_train, train_labels, train_u_indices, train_v_indices,
         val_labels, val_u_indices, val_v_indices, test_labels, test_u_indices, 
-        test_v_indices, class_values
+        test_v_indices, class_values, n_nodes
     ) = load_data_monti(args.data_name, args.testing, rating_map, post_rating_map)
 elif args.data_name == 'ml_100k':
     print("Using official MovieLens split u1.base/u1.test with 20% validation...")
@@ -402,6 +402,7 @@ else:
         n_side_features=n_features, 
         multiply_by=multiply_by,
         pe_dim=args.pe_dim,
+        n_nodes=n_nodes
     )
     total_params = sum(p.numel() for param in model.parameters() for p in param)
     print(f'Total number of parameters is {total_params}')

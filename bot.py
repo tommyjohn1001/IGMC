@@ -27,25 +27,25 @@ def ml100k(ith, seed, pe_dim, scenario):
     )
 
 
-pe_dims = {
-    "ml100k": 50,
-    "ml1M": 50,
-    "yahoo_music": 140,
-    "douban": 115,
-    "flixster": 86,
-}
+if __name__ == "__main__":
+    pe_dims = {
+        "ml100k": 50,
+        "ml1M": 50,
+        "yahoo_music": 140,
+        "douban": 115,
+        "flixster": 86,
+    }
 
-seeds = [37, 10, 4, 73, 21]
-scenario = 3
-for dataset in ["yahoo_music", "douban", "flixster", "ml100k", "ml1M"]:
-    for ith, seed_val in enumerate(seeds):
-        logger.info(f"Test: {ith} - {dataset} - seed: {seed_val:3d}")
-        if dataset == "ml100k":
-            ml100k(ith, seed_val, pe_dims[dataset], scenario)
-        elif dataset == "ml1M":
-            ml1M(ith, seed_val, pe_dims[dataset], scenario)
-        else:
-            flix_dou_yah(dataset, ith, seed_val, pe_dims[dataset], scenario)
+    seeds = [37, 10, 4, 73, 21]
+    scenario = 4
+    for dataset in ["yahoo_music", "douban", "flixster", "ml100k", "ml1M"]:
+        for ith, seed_val in enumerate(seeds):
+            logger.info(f"Test: {ith} - {dataset} - seed: {seed_val:3d}")
+            if dataset == "ml100k":
+                ml100k(ith, seed_val, pe_dims[dataset], scenario)
+            elif dataset == "ml1M":
+                ml1M(ith, seed_val, pe_dims[dataset], scenario)
+            else:
+                flix_dou_yah(dataset, ith, seed_val, pe_dims[dataset], scenario)
 
-
-# python Main.py --data-name yahoo_music --epochs 40 --testing --ensemble --save-appendix _RWPE_80 --data-appendix _RWPE_80 --seed 42 --pe-dim 80
+    # python Main.py --data-name yahoo_music --epochs 40 --testing --ensemble --save-appendix _RWPE_80 --data-appendix _RWPE_80 --seed 42 --pe-dim 80

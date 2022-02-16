@@ -9,10 +9,12 @@ import torch.nn.functional as F
 from torch import tensor
 from torch.optim import Adam
 from sklearn.model_selection import StratifiedKFold
-from torch_geometric.data import DataLoader, DenseDataLoader as DenseLoader
+# from torch_geometric.data import DataLoader, DenseDataLoader as DenseLoader
+from torch_geometric.loader import DataLoader, DenseDataLoader as DenseLoader
 from tqdm import tqdm
 import pdb
 import matplotlib
+import wandb
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from util_functions import PyGGraph_to_nx
@@ -33,7 +35,8 @@ def train_multiple_epochs(train_dataset,
                           test_freq=1, 
                           logger=None, 
                           continue_from=None, 
-                          res_dir=None):
+                          res_dir=None,
+                          args=None):
 
     rmses = []
 
@@ -74,9 +77,16 @@ def train_multiple_epochs(train_dataset,
         pbar = range(start_epoch, epochs + start_epoch)
     for epoch in pbar:
         train_loss = train(model, optimizer, train_loader, device, regression=True, ARR=ARR, 
-                           show_progress=batch_pbar, epoch=epoch)
+                           show_progress=batch_pbar, epoch=epoch, args=args)
+
+        if args.wandb:
+            wandb.log({'epoch': epoch})
         if epoch % test_freq == 0:
-            rmses.append(eval_rmse(model, test_loader, device, show_progress=batch_pbar))
+            test_rmse = eval_rmse(model, test_loader, device, show_progress=batch_pbar)
+            if args.wandb:
+                wandb.log({"val_loss": test_rmse})
+
+            rmses.append(test_rmse)
         else:
             rmses.append(np.nan)
         eval_info = {
@@ -147,14 +157,14 @@ def num_graphs(data):
 
 
 def train(model, optimizer, loader, device, regression=False, ARR=0, 
-          show_progress=False, epoch=None):
+          show_progress=False, epoch=None, args=None):
     model.train()
     total_loss = 0
     if show_progress:
         pbar = tqdm(loader)
     else:
         pbar = loader
-    for data in pbar:
+    for ith, data in enumerate(pbar):
         optimizer.zero_grad()
         data = data.to(device)
         out = model(data)
@@ -164,14 +174,25 @@ def train(model, optimizer, loader, device, regression=False, ARR=0,
             loss = F.nll_loss(out, data.y.view(-1))
         if show_progress:
             pbar.set_description('Epoch {}, batch loss: {}'.format(epoch, loss.item()))
+
+        
         if ARR != 0:
-            for gconv in model.convs:
-                w = torch.matmul(
-                    gconv.att, 
-                    gconv.basis.view(gconv.num_bases, -1)
-                ).view(gconv.num_relations, gconv.in_channels, gconv.out_channels)
-                reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :])**2)
-                loss += ARR * reg_loss
+            # NOTE: Since using GateGCN, ARR loss is calculated in another way
+            # for gconv in model.convs:
+            #     w = torch.matmul(
+            #         gconv.att, 
+            #         gconv.basis.view(gconv.num_bases, -1)
+            #     ).view(gconv.num_relations, gconv.in_channels, gconv.out_channels)
+                # reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :])**2)
+
+            w = model.edge_embd.weight
+            reg_loss = torch.sum((w[1:] - w[:-1])**2)
+            loss += ARR * reg_loss
+
+
+        if args.wandb and ith % 5 == 0:
+            wandb.log({'train_loss_step': loss})
+
         loss.backward()
         total_loss += loss.item() * num_graphs(data)
         optimizer.step()

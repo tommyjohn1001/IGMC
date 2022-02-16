@@ -5,9 +5,12 @@ from loguru import logger
 
 def flix_dou_yah(dataset, ith, seed, pe_dim, scenario):
     os.system(
-        f"python Main.py --data-name {dataset} --epochs 40 --testing --ensemble\
-            --save-appendix _RWPE_{pe_dim}_{scenario}_{ith} --data-appendix _RWPE_{pe_dim}\
-            --seed {seed} --pe-dim {pe_dim}"
+        f"python Main.py --data-name {dataset} --epochs 40\
+            --testing --ensemble --wandb\
+            --save-appendix _RWPE_{pe_dim}_{scenario}_{ith}\
+            --data-appendix _RWPE_pyg2.0_{pe_dim}\
+            --seed {seed}\
+            --pe-dim {pe_dim}"
     )
 
 
@@ -31,14 +34,17 @@ if __name__ == "__main__":
     pe_dims = {
         "ml100k": 50,
         "ml1M": 50,
-        "yahoo_music": 140,
-        "douban": 115,
-        "flixster": 86,
+        # "yahoo_music": 140,
+        # "douban": 115,
+        # "flixster": 86,
+        "yahoo_music": 20,
+        "douban": 20,
+        "flixster": 20,
     }
 
     seeds = [37, 10, 4, 73, 21]
-    scenario = 4
-    for dataset in ["yahoo_music", "douban", "flixster", "ml100k", "ml1M"]:
+    scenario = 1
+    for dataset in ["yahoo_music", "douban", "flixster"]:
         for ith, seed_val in enumerate(seeds):
             logger.info(f"Test: {ith} - {dataset} - seed: {seed_val:3d}")
             if dataset == "ml100k":

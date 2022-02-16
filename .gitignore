@@ -15,3 +15,4 @@ slurms/
 *.tar.gz
 tests/
 *.pkl
+wandb

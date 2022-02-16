@@ -1,22 +1,31 @@
-import torch
-import numpy as np
-import sys, copy, math, time, pdb, warnings, traceback
-import scipy.io as sio
-import scipy.sparse as ssp
-import os.path
-import random
 import argparse
-from shutil import copy, rmtree, copytree
-from torch.optim.lr_scheduler import ReduceLROnPlateau
-from util_functions import *
-from data_utils import *
-from preprocessing import *
-from train_eval import *
-from models import *
-
+import copy
+import math
+import os.path
+import pdb
+import random
+import sys
+import time
 import traceback
 import warnings
-import sys
+from datetime import datetime, timedelta
+from shutil import copy, copytree, rmtree
+
+import dotenv
+import numpy as np
+import scipy.io as sio
+import scipy.sparse as ssp
+import torch
+import wandb
+from torch.optim.lr_scheduler import ReduceLROnPlateau
+
+from data_utils import *
+from models import *
+from preprocessing import *
+from train_eval import *
+from util_functions import *
+
+dotenv.load_dotenv(override=True)
 
 # used to traceback which code cause warnings, can delete
 def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
@@ -48,6 +57,7 @@ def logger(info, model, optimizer):
 # Arguments
 parser = argparse.ArgumentParser(description='Inductive Graph-based Matrix Completion')
 # general settings
+parser.add_argument("--wandb", action="store_true")
 parser.add_argument('--testing', action='store_true', default=False,
                     help='if set, use testing mode which splits all ratings into train/test;\
                     otherwise, use validation model which splits all ratings into \
@@ -407,6 +417,17 @@ else:
     total_params = sum(p.numel() for param in model.parameters() for p in param)
     print(f'Total number of parameters is {total_params}')
     
+## Init wandb logger
+if args.wandb:
+    wandb.login()
+    now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H-%M-%S")
+    appdx = f"{args.data_appendix}"
+    if args.save_appendix != '':
+        appdx += f"{args.save_appendix}"
+    name = f"{args.data_name}_{now}{appdx}"
+    wandb.init(project="IGMC", name=name, config=args)
+
+    wandb.watch(model)
 
 if not args.no_train:
     train_multiple_epochs(
@@ -423,7 +444,8 @@ if not args.no_train:
         test_freq=args.test_freq, 
         logger=logger, 
         continue_from=args.continue_from, 
-        res_dir=args.res_dir
+        res_dir=args.res_dir,
+        args=args,
     )
 
 if args.visualize:

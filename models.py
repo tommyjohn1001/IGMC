@@ -38,7 +38,7 @@ class IGMC(GNN):
 
         # NOTE: If for the 3rd scenario, use the followings instead of the above
         self.node_feat_dim = dataset.num_features - pe_dim - 1
-        self.lin_node_feat = nn.Linear(self.node_feat_dim, latent_dim[0])
+        self.lin_node_feat = nn.Linear(self.node_feat_dim + pe_dim, latent_dim[0])
         # self.lin_pe = nn.Linear(pe_dim, 64)
         # self.node_embds = nn.Embedding(n_nodes, 64)
         # self.ff1 = nn.Sequential(
@@ -73,13 +73,12 @@ class IGMC(GNN):
             x[:, 1 : self.node_feat_dim + 1],
             x[:, self.node_feat_dim + 1 :],
         )
-        node_subgraph_feat = self.lin_node_feat(node_subgraph_feat)
+        x = torch.cat((node_subgraph_feat, pe), -1)
+        x = self.lin_node_feat(x)
         # pe = self.lin_pe(pe)
         # node_global_feat = self.node_embds(node_indx)
         # x = torch.cat((node_subgraph_feat, pe, node_global_feat.squeeze(1)), dim=-1)
         # x = self.ff1(x)
-
-        x = node_subgraph_feat
 
         concat_states = []
         for conv in self.convs:

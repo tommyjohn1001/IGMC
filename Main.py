@@ -16,9 +16,8 @@ import numpy as np
 import scipy.io as sio
 import scipy.sparse as ssp
 import torch
-import wandb
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 
+import wandb
 from data_utils import *
 from models import *
 from preprocessing import *
@@ -420,10 +419,10 @@ else:
 ## Init wandb logger
 if args.wandb:
     wandb.login()
-    now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H-%M-%S")
+    now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H:%M:%S")
     appdx = f"{args.data_appendix}"
     if args.save_appendix != '':
-        appdx += f"{args.save_appendix}"
+        appdx += f"{args.save_appendix.replace(f'_{args.pe_dim}', '')}"
     name = f"{args.data_name}_{now}{appdx}"
     wandb.init(project="IGMC", name=name, config=args)
 

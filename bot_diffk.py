@@ -34,16 +34,13 @@ if __name__ == "__main__":
     pe_dims = {
         "ml100k": 50,
         "ml1M": 50,
-        # "yahoo_music": 140,
-        # "douban": 115,
-        # "flixster": 86,
-        "yahoo_music": 20,
-        "douban": 20,
-        "flixster": 20,
+        "yahoo_music": 140,
+        "douban": 115,
+        "flixster": 86,
     }
 
     seeds = [37, 10, 4, 73, 21]
-    scenario = 1
+    scenario = 5
     for dataset in ["yahoo_music", "douban", "flixster"]:
         for ith, seed_val in enumerate(seeds):
             logger.info(f"Test: {ith} - {dataset} - seed: {seed_val:3d}")

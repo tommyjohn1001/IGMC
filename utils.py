@@ -50,6 +50,7 @@ def get_train_val_datasets(args, combine_trainval=False):
             test_u_indices,
             test_v_indices,
             class_values,
+            n_nodes,
         ) = load_data_monti(args.data_name, combine_trainval, rating_map, post_rating_map)
     elif args.data_name == "ml_100k":
         print("Using official MovieLens split u1.base/u1.test with 20% validation...")
@@ -101,10 +102,9 @@ def get_train_val_datasets(args, combine_trainval=False):
     val_indices = (val_u_indices, val_v_indices)
     test_indices = (test_u_indices, test_v_indices)
 
-    mode = "trainval_test" if combine_trainval is True else "train_val_test"
     dataset_class = "MyDynamicDataset" if args.dynamic_train else "MyDataset"
     train_graphs = getattr(util_functions, dataset_class)(
-        f"data/{mode}/{args.data_name}/train",
+        f"data/{args.data_name}{args.data_appendix}/train",
         adj_train,
         train_indices,
         train_labels,
@@ -114,10 +114,11 @@ def get_train_val_datasets(args, combine_trainval=False):
         u_features,
         v_features,
         class_values,
+        args.pe_dim,
         max_num=args.max_train_num,
     )
     test_graphs = getattr(util_functions, dataset_class)(
-        f"data/{mode}/{args.data_name}/test",
+        f"data/{args.data_name}{args.data_appendix}/test",
         adj_train,
         test_indices,
         test_labels,
@@ -127,10 +128,11 @@ def get_train_val_datasets(args, combine_trainval=False):
         u_features,
         v_features,
         class_values,
+        args.pe_dim,
         max_num=args.max_test_num,
     )
     val_graphs = getattr(util_functions, dataset_class)(
-        f"data/{mode}/{args.data_name}/val",
+        f"data/{args.data_name}{args.data_appendix}/val",
         adj_train,
         val_indices,
         val_labels,
@@ -140,6 +142,7 @@ def get_train_val_datasets(args, combine_trainval=False):
         u_features,
         v_features,
         class_values,
+        args.pe_dim,
         max_num=args.max_val_num,
     )
 
@@ -150,7 +153,7 @@ def get_train_val_datasets(args, combine_trainval=False):
     else:
         logger.info(f"Data info: train: {len(train_graphs)} - test: {len(test_graphs)}")
 
-    return train_graphs, val_graphs, test_graphs, u_features, v_features, class_values
+    return train_graphs, val_graphs, test_graphs, u_features, v_features, class_values, n_nodes
 
 
 def get_args():
@@ -162,7 +165,8 @@ def get_args():
     parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--predict", action="store_true")
     parser.add_argument("--superpod", action="store_true")
-    parser.add_argument("--combine_trainval", action='store_true')
+    parser.add_argument("--combine_trainval", action="store_false")
+    parser.add_argument("--pe-dim", type=int, default=20)
     parser.add_argument(
         "--ARR",
         type=float,
@@ -401,7 +405,7 @@ def get_args():
     return args, config_dataset
 
 
-def get_model(args, hparams, train_dataset, u_features, v_features, class_values):
+def get_model(args, hparams, train_dataset, u_features, v_features, class_values, n_nodes):
     if args.use_features:
         u_features, v_features = u_features.toarray(), v_features.toarray()
         n_features = u_features.shape[1] + v_features.shape[1]
@@ -448,6 +452,8 @@ def get_model(args, hparams, train_dataset, u_features, v_features, class_values
         class_values=class_values,
         ARR=hparams["ARR"],
         temperature=hparams["temperature"],
+        pe_dim=args.pe_dim,
+        n_nodes=n_nodes,
     )
 
     return model
@@ -469,7 +475,7 @@ def get_trainer(args, hparams):
     if len(args.gpus) > 1:
         additional_info.append("multi")
     additional_info = f"{'_'.join(additional_info)}_" if len(additional_info) > 0 else ""
-    name = f"{args.data_name}_{args.exp_name}_{additional_info}{now}"
+    name = f"{args.data_name}_{additional_info}{now}{args.save_appendix}"
 
     path_dir_ckpt = osp.join(root_logging, "ckpts", name)
 

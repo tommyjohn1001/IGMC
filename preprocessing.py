@@ -276,6 +276,7 @@ def load_data_monti(dataset, combine_trainval=False, rating_map=None, post_ratin
     print("number of users = ", len(set(u_nodes)))
     print("number of item = ", len(set(v_nodes)))
 
+    n_nodes = max(u_nodes) + 1 + max(v_nodes) + 1
     neutral_rating = -1  # int(np.ceil(np.float(num_classes)/2.)) - 1
 
     # assumes that ratings_train contains at least one example of every rating type
@@ -377,6 +378,7 @@ def load_data_monti(dataset, combine_trainval=False, rating_map=None, post_ratin
         u_test_idx,
         v_test_idx,
         class_values,
+        n_nodes,
     )
 
 

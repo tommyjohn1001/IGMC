@@ -18,7 +18,7 @@ class IGMC(GNN):
     def __init__(
         self,
         dataset,
-        gconv=RGCNConv,
+        gconv=GatedGCNLayer,
         latent_dim=[32, 32, 32, 32],
         hid_dim=128,
         num_relations=5,
@@ -50,11 +50,9 @@ class IGMC(GNN):
 
         self.convs = torch.nn.ModuleList()
         if gconv in [RGCNConv]:
-            self.convs.append(gconv(dataset.num_features, latent_dim[0], num_relations, num_bases))
+            self.convs.append(gconv(latent_dim[0], latent_dim[0]))
             for i in range(0, len(latent_dim) - 1):
-                self.convs.append(
-                    gconv(latent_dim[i], latent_dim[i + 1], num_relations, num_bases)
-                )
+                self.convs.append(gconv(latent_dim[i], latent_dim[i + 1]))
         elif gconv is GATConv:
             self.convs.append(gconv(dataset.num_features, latent_dim[0], edge_dim=128))
             for i in range(0, len(latent_dim) - 1):
@@ -199,7 +197,7 @@ class IGMC(GNN):
                 edge_features = self.edge_embd(edge_type)
                 x = torch.tanh(conv(x, edge_index, edge_features))
             else:
-                x = torch.tanh(conv(x, edge_index, edge_type))
+                x = conv(x, edge_index, edge_type)
             concat_states.append(x)
         concat_states = torch.cat(concat_states, 1)
 
@@ -339,7 +337,7 @@ class IGMC2(GNN):
     def __init__(
         self,
         dataset,
-        gconv=RGCNConv,
+        gconv=GatedGCNLayer,
         latent_dim=[32, 32, 32, 32],
         hid_dim=128,
         num_relations=5,
@@ -356,6 +354,8 @@ class IGMC2(GNN):
         class_values=None,
         ARR=0.01,
         temperature=0.1,
+        pe_dim=20,
+        n_nodes=3000,
     ):
         super(IGMC2, self).__init__(
             dataset, GCNConv, latent_dim, regression, adj_dropout, force_undirected
@@ -368,28 +368,28 @@ class IGMC2(GNN):
         self.map_edgetype2id = {v: i for i, v in enumerate(class_values)}
 
         self.multiply_by = multiply_by
+
+        self.node_feat_dim = dataset.num_features - pe_dim - 1
+        ## NOTE: Add pe_dim to in_dim of the following if scenario 9 -> 12
+        self.lin_node_feat = nn.Linear(self.node_feat_dim, latent_dim[0])
+
         self.convs = torch.nn.ModuleList()
-        if gconv in [RGCNConv]:
-            self.convs.append(gconv(dataset.num_features, latent_dim[0], num_relations, num_bases))
-            for i in range(0, len(latent_dim) - 1):
-                self.convs.append(
-                    gconv(latent_dim[i], latent_dim[i + 1], num_relations, num_bases)
-                )
-        elif gconv is GATConv:
-            self.convs.append(gconv(dataset.num_features, latent_dim[0], edge_dim=128))
-            for i in range(0, len(latent_dim) - 1):
-                self.convs.append(gconv(latent_dim[i], latent_dim[i + 1], edge_dim=128))
-        else:
-            raise NotImplementedError()
+        self.convs.append(gconv(latent_dim[0], latent_dim[0]))
+        for i in range(0, len(latent_dim) - 1):
+            self.convs.append(gconv(latent_dim[i], latent_dim[i + 1]))
+
         # self.lin1 = Linear(2 * sum(latent_dim), 128)
         self.lin1 = Linear(hid_dim, hid_dim)
         self.side_features = side_features
         if side_features:
             self.lin1 = Linear(2 * sum(latent_dim) + n_side_features, hid_dim)
 
+        self.edge_embd = nn.Embedding(num_relations, latent_dim[0])
+
         self.max_neighbors = max_neighbors
         self.max_walks = max_walks
         self.naive_walking_lin1 = nn.Linear(hid_dim, self.max_neighbors)
+        self.lin_edge = nn.Linear(latent_dim[0], 128)
         # self.edge_embd = nn.Linear(1, 128)
         # self.lin_embd = nn.Sequential(nn.Linear(256, 256), nn.Tanh())
         # self.lin_embd2 = nn.Linear(256, 128, bias=False)
@@ -404,15 +404,6 @@ class IGMC2(GNN):
         # edge_index: [2: n_edges]
 
         ## Do something to get start and end nodes
-        edge_embeddings = []
-        for gconv in self.convs:
-            w = torch.matmul(gconv.att, gconv.basis.view(gconv.num_bases, -1)).view(
-                gconv.num_relations, gconv.in_channels, gconv.out_channels
-            )
-            # [n_relations, n_in, n_out]
-            edge_embeddings.append(w.mean(1))
-        edge_embeddings = torch.cat(edge_embeddings, -1)
-        # [n_relations, 128]
 
         ## start looping
 
@@ -522,11 +513,8 @@ class IGMC2(GNN):
             selected_neighbor_softmax = selected_neighbor_softmax.unsqueeze(0)
             selected_node_embd = selected_neighbor_softmax @ x_neighbors
             selected_edge_type = edge_type_[selected_neighbor]
-            selected_edge_type = F.one_hot(
-                selected_edge_type.unsqueeze(0), self.num_relations
-            ).float()
-            selected_edge_embd = selected_edge_type @ edge_embeddings
-
+            selected_edge_embd = self.edge_embd(selected_edge_type.unsqueeze(0).long())
+            selected_edge_embd = self.lin_edge(selected_edge_embd)
             ## dùng cơ chế cộng để accumulate hoặc áp dụng memorynet
             total = torch.cat((selected_node_embd, selected_edge_embd), -1)
             # [b, 256]
@@ -581,20 +569,28 @@ class IGMC2(GNN):
                 num_nodes=len(x),
                 training=self.training,
             )
+
+        edge_embd = self.edge_embd(edge_type)
+
+        node_indx, node_subgraph_feat, pe = (
+            x[:, :1].long(),
+            x[:, 1 : self.node_feat_dim + 1],
+            x[:, self.node_feat_dim + 1 :],
+        )
+        ## NOTE: Enable the following if scenario 9 -> 12
+        # x = torch.cat((node_subgraph_feat, pe), -1)
+        x = self.lin_node_feat(node_subgraph_feat)
+
         concat_states = []
         for conv in self.convs:
-            if isinstance(conv, GATConv):
-                edge_features = self.edge_embd(edge_type)
-                x = torch.tanh(conv(x, edge_index, edge_features))
-            else:
-                x = torch.tanh(conv(x, edge_index, edge_type))
+            x = conv(x, edge_embd, edge_index)
             concat_states.append(x)
         concat_states = torch.cat(concat_states, 1)
 
         ## Lọc ra vị trí user của các batch, user này là user cần predict link, chứ không phải user's neighbor
-        users = data.x[:, 0] == 1
+        users = data.x[:, 1] == 1
         ## Lọc ra vị trí movie của các batch, movie này là movie cần predict
-        items = data.x[:, 1] == 1
+        items = data.x[:, 2] == 1
         ## vì mỗi batch chỉ cần predict một cặp user-item, nên có 50 batch thì sẽ có 50 user được lọc ra, 50 movie được lọc ra
         ## mỗi user sẽ được
 
@@ -644,16 +640,7 @@ class IGMC2(GNN):
         ## ARR loss
         loss_arr = 0
         if self.ARR > 0:
-            if isinstance(conv, GATConv):
-                loss_arr = torch.sum((self.edge_embd.weight[1:] - self.edge_embd.weight[:-1]) ** 2)
-            else:
-                for gconv in self.convs:
-                    w = torch.matmul(gconv.att, gconv.basis.view(gconv.num_bases, -1)).view(
-                        gconv.num_relations, gconv.in_channels, gconv.out_channels
-                    )
-                    reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :]) ** 2)
-                    loss_arr += reg_loss
-
+            loss_arr = torch.sum((self.edge_embd.weight[1:] - self.edge_embd.weight[:-1]) ** 2)
         loss = loss_mse + self.ARR * loss_arr
         if torch.isnan(loss):
             print(f"NaN: {loss_mse} - {loss_arr}")

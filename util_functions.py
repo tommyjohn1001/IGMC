@@ -16,6 +16,7 @@ import numpy as np
 import scipy.io as sio
 import scipy.sparse as ssp
 import torch
+import torch_geometric.utils as pyg_utils
 from torch_geometric.data import Data, Dataset, InMemoryDataset
 from tqdm import tqdm
 
@@ -88,6 +89,7 @@ class MyDataset(InMemoryDataset):
         u_features,
         v_features,
         class_values,
+        pe_dim,
         max_num=None,
         parallel=True,
     ):
@@ -101,9 +103,9 @@ class MyDataset(InMemoryDataset):
         self.u_features = u_features
         self.v_features = v_features
         self.class_values = class_values
-        # FIXME: Replace as True
-        self.parallel = False
+        self.parallel = parallel
         self.max_num = max_num
+        self.pe_dim = pe_dim
         if max_num is not None:
             np.random.seed(123)
             num_links = len(links[0])
@@ -129,6 +131,7 @@ class MyDataset(InMemoryDataset):
             self.links,
             self.labels,
             self.h,
+            self.pe_dim,
             self.sample_ratio,
             self.max_nodes_per_hop,
             self.u_features,
@@ -136,6 +139,8 @@ class MyDataset(InMemoryDataset):
             self.class_values,
             self.parallel,
         )
+
+        # torch.save(data_list, "subgraphs_.pkl")
 
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[0])
@@ -155,6 +160,7 @@ class MyDynamicDataset(Dataset):
         u_features,
         v_features,
         class_values,
+        pe_dim,
         max_num=None,
     ):
         super(MyDynamicDataset, self).__init__(root)
@@ -168,6 +174,7 @@ class MyDynamicDataset(Dataset):
         self.u_features = u_features
         self.v_features = v_features
         self.class_values = class_values
+        self.pe_dim = pe_dim
         if max_num is not None:
             np.random.seed(123)
             num_links = len(links[0])
@@ -175,9 +182,6 @@ class MyDynamicDataset(Dataset):
             perm = perm[:max_num]
             self.links = (links[0][perm], links[1][perm])
             self.labels = labels[perm]
-
-    def len(self):
-        return self.__len__()
 
     def __len__(self):
         return len(self.links[0])
@@ -197,7 +201,7 @@ class MyDynamicDataset(Dataset):
             self.class_values,
             g_label,
         )
-        return construct_pyg_graph(*tmp)
+        return construct_pyg_graph(*tmp, self.pe_dim)
 
 
 def links2subgraphs(
@@ -206,6 +210,7 @@ def links2subgraphs(
     links,
     labels,
     h=1,
+    pe_dim=1,
     sample_ratio=1.0,
     max_nodes_per_hop=None,
     u_features=None,
@@ -213,9 +218,6 @@ def links2subgraphs(
     class_values=None,
     parallel=True,
 ):
-    ## links: [2, n]: các cặp node cần predict link
-    ## labels:
-
     # extract enclosing subgraphs
     print("Enclosing subgraph extraction begins...")
     g_list = []
@@ -234,7 +236,7 @@ def links2subgraphs(
                     class_values,
                     g_label,
                 )
-                data = construct_pyg_graph(*tmp)
+                data = construct_pyg_graph(*tmp, pe_dim)
                 g_list.append(data)
                 pbar.update(1)
     else:
@@ -276,7 +278,7 @@ def links2subgraphs(
         pbar = tqdm(total=len(results))
         while results:
             tmp = results.pop()
-            g_list.append(construct_pyg_graph(*tmp))
+            g_list.append(construct_pyg_graph(*tmp, pe_dim))
             pbar.update(1)
         pbar.close()
         end2 = time.time()
@@ -331,6 +333,7 @@ def subgraph_extraction_labeling(
     r = r - 1  # transform r back to rating label
     num_nodes = len(u_nodes) + len(v_nodes)
     node_labels = [x * 2 for x in u_dist] + [x * 2 + 1 for x in v_dist]
+    node_index = u_nodes + v_nodes
     max_node_label = 2 * h + 1
     y = class_values[y]
 
@@ -362,27 +365,68 @@ def subgraph_extraction_labeling(
         if u_features is not None and v_features is not None:
             node_features = [u_features[0], v_features[0]]
 
-    return u, v, r, node_labels, max_node_label, y, node_features
+    return u, v, r, node_labels, max_node_label, y, node_features, node_index
 
 
-def construct_pyg_graph(u, v, r, node_labels, max_node_label, y, node_features):
+def init_positional_encoding(g, pos_enc_dim):
+    """
+    Initializing positional encoding with RWPE
+    """
+
+    if len(g.edge_type) == 0:
+        node_feat = g.x
+        PE = torch.zeros(
+            (node_feat.size(0), pos_enc_dim), dtype=node_feat.dtype, device=node_feat.device
+        )
+    else:
+        # Geometric diffusion features with Random Walk
+        A = ssp.csr_matrix(pyg_utils.to_dense_adj(g.edge_index).squeeze().numpy())
+        Dinv = ssp.diags(pyg_utils.degree(g.edge_index[0]).numpy().clip(1) ** -1.0)  # D^-1
+        RW = A * Dinv
+        M = RW
+
+        # Iterate
+        nb_pos_enc = pos_enc_dim
+        PE = [torch.from_numpy(M.diagonal()).float()]
+        M_power = M
+        for _ in range(nb_pos_enc - 1):
+            M_power = M_power * M
+            PE.append(torch.from_numpy(M_power.diagonal()).float())
+
+        PE = torch.stack(PE, dim=-1)
+
+    ## Concate PE to node feat
+    g.x = torch.cat((g.x, PE), -1)
+
+
+def construct_pyg_graph(
+    u, v, r, node_labels, max_node_label, y, node_features, node_index, pos_enc_dim
+):
+    # TODO: Append node index of each node in u, v, node index is fetched from u_nodes, v_nodes to append to node_feat
     u, v = torch.LongTensor(u), torch.LongTensor(v)
     r = torch.LongTensor(r)
+    node_index = torch.LongTensor(node_index)
     edge_index = torch.stack([torch.cat([u, v]), torch.cat([v, u])], 0)
     edge_type = torch.cat([r, r])
     x = torch.FloatTensor(one_hot(node_labels, max_node_label + 1))
     y = torch.FloatTensor([y])
     data = Data(x, edge_index, edge_type=edge_type, y=y)
 
+    ## Concate with node index
+    data.x = torch.cat([node_index.unsqueeze(-1), data.x], 1)
+
     if node_features is not None:
         if type(node_features) == list:  # a list of u_feature and v_feature
             u_feature, v_feature = node_features
-
-            data.u_feature = torch.FloatTensor(u_feature.toarray()).unsqueeze(0)
-            data.v_feature = torch.FloatTensor(v_feature.toarray()).unsqueeze(0)
+            data.u_feature = torch.FloatTensor(u_feature.todense()).unsqueeze(0)
+            data.v_feature = torch.FloatTensor(v_feature.todense()).unsqueeze(0)
         else:
             x2 = torch.FloatTensor(node_features)
             data.x = torch.cat([data.x, x2], 1)
+
+    ## Add PE info
+    init_positional_encoding(data, pos_enc_dim=pos_enc_dim)
+
     return data
 
 

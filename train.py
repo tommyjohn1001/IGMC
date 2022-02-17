@@ -31,6 +31,7 @@ if __name__ == "__main__":
         u_features,
         v_features,
         class_values,
+        n_nodes,
     ) = get_train_val_datasets(args, combine_trainval=args.combine_trainval)
     print("All ratings are:")
     print(class_values)
@@ -38,7 +39,7 @@ if __name__ == "__main__":
     train_loader, val_loader, test_loader = get_loaders(
         train_graphs, val_graphs, test_graphs, hparams
     )
-    model = get_model(args, hparams, train_graphs, u_features, v_features, class_values)
+    model = get_model(args, hparams, train_graphs, u_features, v_features, class_values, n_nodes)
     trainer_train, trainer_eval, path_dir_ckpt = get_trainer(args, hparams)
     lit_model = IGMCLitModel(model, hparams)
 

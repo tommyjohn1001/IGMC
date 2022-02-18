@@ -1,22 +1,22 @@
-import time
-import os
 import math
 import multiprocessing as mp
-import numpy as np
+import os
+import time
+
+import matplotlib
 import networkx as nx
+import numpy as np
 import torch
 import torch.nn.functional as F
-from torch import tensor
-from torch.optim import Adam
-from sklearn.model_selection import StratifiedKFold
-# from torch_geometric.data import DataLoader, DenseDataLoader as DenseLoader
-from torch_geometric.loader import DataLoader, DenseDataLoader as DenseLoader
-from tqdm import tqdm
-import pdb
-import matplotlib
 import wandb
+from torch.optim import Adam
+from torch_geometric.data import DataLoader
+from torch_geometric.data import DenseDataLoader as DenseLoader
+from tqdm import tqdm
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+
 from util_functions import PyGGraph_to_nx
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -175,16 +175,7 @@ def train(model, optimizer, loader, device, regression=False, ARR=0,
         if show_progress:
             pbar.set_description('Epoch {}, batch loss: {}'.format(epoch, loss.item()))
 
-        
-        if ARR != 0:
-            # NOTE: Since using GateGCN, ARR loss is calculated in another way
-            # for gconv in model.convs:
-            #     w = torch.matmul(
-            #         gconv.att, 
-            #         gconv.basis.view(gconv.num_bases, -1)
-            #     ).view(gconv.num_relations, gconv.in_channels, gconv.out_channels)
-                # reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :])**2)
-
+        if args.scenario in [1, 3, 5]:
             w = model.edge_embd.weight
             reg_loss = torch.sum((w[1:] - w[:-1])**2)
             loss += ARR * reg_loss

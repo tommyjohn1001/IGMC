@@ -56,6 +56,7 @@ def logger(info, model, optimizer):
 # Arguments
 parser = argparse.ArgumentParser(description='Inductive Graph-based Matrix Completion')
 # general settings
+parser.add_argument("--scenario", type=int, default=1)
 parser.add_argument("--wandb", action="store_true")
 parser.add_argument('--testing', action='store_true', default=False,
                     help='if set, use testing mode which splits all ratings into train/test;\
@@ -411,7 +412,8 @@ else:
         n_side_features=n_features, 
         multiply_by=multiply_by,
         pe_dim=args.pe_dim,
-        n_nodes=n_nodes
+        n_nodes=n_nodes,
+        scenario=args.scenario
     )
     total_params = sum(p.numel() for param in model.parameters() for p in param)
     print(f'Total number of parameters is {total_params}')

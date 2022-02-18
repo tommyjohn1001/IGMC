@@ -26,27 +26,38 @@ class IGMC(GNN):
         multiply_by=1,
         pe_dim=20,
         n_nodes=3000,
+        scenario=1,
     ):
         super(IGMC, self).__init__(
             dataset, gconv, latent_dim, regression, adj_dropout, force_undirected
         )
+
         self.multiply_by = multiply_by
+        self.scenario = scenario
 
-        self.edge_embd = nn.Embedding(num_relations, latent_dim[0])
+        ## Declare modules to convert edge index to hidden edge vector
+        if self.scenario in [1, 3, 5]:
+            self.edge_embd = nn.Embedding(num_relations, latent_dim[0])
+        elif self.scenario in [2, 4, 6]:
+            self.edge_embd = nn.Linear(1, latent_dim[0])
+        else:
+            raise NotImplementedError()
 
-        self.convs = torch.nn.ModuleList()
-
-        # NOTE: If for the 3rd scenario, use the followings instead of the above
+        ## Declare modules to convert node feat, pe to hidden vectors
         self.node_feat_dim = dataset.num_features - pe_dim - 1
-        self.lin_node_feat = nn.Linear(self.node_feat_dim + pe_dim, latent_dim[0])
-        # self.lin_pe = nn.Linear(pe_dim, 64)
-        # self.node_embds = nn.Embedding(n_nodes, 64)
-        # self.ff1 = nn.Sequential(
-        #     nn.Linear(64 * 3, 64 * 3), nn.Dropout(0.2), nn.Tanh(), nn.Linear(64 * 3, latent_dim[0])
-        # )
+        if self.scenario in [1, 2]:
+            self.lin_node_feat = nn.Linear(self.node_feat_dim, latent_dim[0])
+        elif self.scenario in [3, 4, 5, 6]:
+            self.lin_node_feat = nn.Linear(self.node_feat_dim + pe_dim, latent_dim[0])
+        else:
+            raise NotImplementedError()
+
+        ## Declare GNN layers
+        self.convs = torch.nn.ModuleList()
         self.convs.append(gconv(latent_dim[0], latent_dim[0]))
         for i in range(0, len(latent_dim) - 1):
             self.convs.append(gconv(latent_dim[i], latent_dim[i + 1]))
+
         self.lin1 = Linear(2 * sum(latent_dim), 128)
         self.side_features = side_features
         if side_features:
@@ -65,21 +76,27 @@ class IGMC(GNN):
                 training=self.training,
             )
 
+        if self.scenario in [2,4,6]:
+            edge_type = edge_type.unsqueeze(-1).float()
         edge_embd = self.edge_embd(edge_type)
 
-        # NOTE: If for the 3rd scenario, enable the followings
+        ## Extract node feature, RWPE info and global node index
         node_indx, node_subgraph_feat, pe = (
             x[:, :1].long(),
             x[:, 1 : self.node_feat_dim + 1],
             x[:, self.node_feat_dim + 1 :],
         )
-        x = torch.cat((node_subgraph_feat, pe), -1)
-        x = self.lin_node_feat(x)
-        # pe = self.lin_pe(pe)
-        # node_global_feat = self.node_embds(node_indx)
-        # x = torch.cat((node_subgraph_feat, pe, node_global_feat.squeeze(1)), dim=-1)
-        # x = self.ff1(x)
 
+        ## Convert node feat, pe to suitable dim before passing thu GNN layers
+        if self.scenario in [3, 4, 5, 6]:
+            x = torch.cat((node_subgraph_feat, pe), -1)
+            x = self.lin_node_feat(x)
+        elif self.scenario in [1, 2]:
+            x = self.lin_node_feat(node_subgraph_feat)
+        else:
+            raise NotImplementedError()
+
+        ## Pass node feat thru GNN layers
         concat_states = []
         for conv in self.convs:
             x = conv(x, edge_embd, edge_index)

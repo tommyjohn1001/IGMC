@@ -189,6 +189,7 @@ def get_args():
         help="Switch between Naive Reasoning Walking ver 1 and 2",
     )
     parser.add_argument("--hid-dim", type=int, default=64)
+    parser.add_argument("--scenario", type=int, default=1)
 
     ################################################################################################################
 
@@ -454,6 +455,7 @@ def get_model(args, hparams, train_dataset, u_features, v_features, class_values
         temperature=hparams["temperature"],
         pe_dim=args.pe_dim,
         n_nodes=n_nodes,
+        scenario=args.scenario,
     )
 
     return model
@@ -498,7 +500,7 @@ def get_trainer(args, hparams):
         name=name,
         version=now,
     )
-    logger_wandb = WandbLogger(name, root_logging)
+    logger_wandb = WandbLogger(name, root_logging, project="IGMC")
 
     trainer_train = Trainer(
         gpus=args.gpus,

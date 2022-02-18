@@ -272,64 +272,6 @@ class IGMC(GNN):
 
         return x[:, 0], loss
 
-    #     super(IGMC, self).__init__(
-    #         dataset, GCNConv, latent_dim, regression, adj_dropout, force_undirected
-    #     )
-
-    #     self.ARR = ARR
-
-    #     self.multiply_by = multiply_by
-    #     self.convs = torch.nn.ModuleList()
-    #     self.convs.append(gconv(dataset.num_features, latent_dim[0], num_relations, num_bases))
-    #     for i in range(0, len(latent_dim) - 1):
-    #         self.convs.append(gconv(latent_dim[i], latent_dim[i + 1], num_relations, num_bases))
-    #     self.lin1 = Linear(2 * sum(latent_dim), 128)
-    #     self.side_features = side_features
-    #     if side_features:
-    #         self.lin1 = Linear(2 * sum(latent_dim) + n_side_features, 128)
-
-    # def forward(self, data):
-    #     x, edge_index, edge_type, batch = data.x, data.edge_index, data.edge_type, data.batch
-    #     if self.adj_dropout > 0:
-    #         edge_index, edge_type = dropout_adj(
-    #             edge_index,
-    #             edge_type,
-    #             p=self.adj_dropout,
-    #             force_undirected=self.force_undirected,
-    #             num_nodes=len(x),
-    #             training=self.training,
-    #         )
-    #     concat_states = []
-    #     for conv in self.convs:
-    #         x = torch.tanh(conv(x, edge_index, edge_type))
-    #         concat_states.append(x)
-    #     concat_states = torch.cat(concat_states, 1)
-
-    #     users = data.x[:, 0] == 1
-    #     items = data.x[:, 1] == 1
-    #     x = torch.cat([concat_states[users], concat_states[items]], 1)
-    #     if self.side_features:
-    #         x = torch.cat([x, data.u_feature, data.v_feature], 1)
-
-    #     x = F.relu(self.lin1(x))
-    #     x = F.dropout(x, p=0.5, training=self.training)
-    #     x = self.lin2(x)
-
-    #     loss_mse = F.mse_loss(x[:, 0] * self.multiply_by, data.y.view(-1))
-
-    #     loss_arr = 0
-    #     if self.ARR > 0:
-    #         for gconv in self.convs:
-    #             w = torch.matmul(gconv.att, gconv.basis.view(gconv.num_bases, -1)).view(
-    #                 gconv.num_relations, gconv.in_channels, gconv.out_channels
-    #             )
-    #             reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :]) ** 2)
-    #             loss_arr += reg_loss
-
-    #     loss = loss_mse + self.ARR * loss_arr
-
-    #     return x[:, 0], loss
-
 
 class IGMC2(GNN):
     # The GNN model of Inductive Graph-based Matrix Completion.
@@ -356,6 +298,7 @@ class IGMC2(GNN):
         temperature=0.1,
         pe_dim=20,
         n_nodes=3000,
+        scenario=1,
     ):
         super(IGMC2, self).__init__(
             dataset, GCNConv, latent_dim, regression, adj_dropout, force_undirected
@@ -366,13 +309,26 @@ class IGMC2(GNN):
         self.num_relations = num_relations
         self.temperature = temperature
         self.map_edgetype2id = {v: i for i, v in enumerate(class_values)}
-
+        self.scenario = scenario
         self.multiply_by = multiply_by
 
-        self.node_feat_dim = dataset.num_features - pe_dim - 1
-        ## NOTE: Add pe_dim to in_dim of the following if scenario 9 -> 12
-        self.lin_node_feat = nn.Linear(self.node_feat_dim, latent_dim[0])
+        if self.scenario in [7, 9, 11, 13]:
+            self.edge_embd = nn.Embedding(num_relations, latent_dim[0])
+        elif self.scenario in [8, 10, 12, 14]:
+            self.edge_embd = nn.Linear(1, latent_dim[0])
+        else:
+            raise NotImplementedError()
 
+        ## Declare modules to convert node feat, pe to hidden vectors
+        self.node_feat_dim = dataset.num_features - pe_dim - 1
+        if self.scenario in [7, 8, 9, 10]:
+            self.lin_node_feat = nn.Linear(self.node_feat_dim, latent_dim[0])
+        elif self.scenario in [11, 12, 13, 14]:
+            self.lin_node_feat = nn.Linear(self.node_feat_dim + pe_dim, latent_dim[0])
+        else:
+            raise NotImplementedError()
+
+        ## Declare GNN layers
         self.convs = torch.nn.ModuleList()
         self.convs.append(gconv(latent_dim[0], latent_dim[0]))
         for i in range(0, len(latent_dim) - 1):
@@ -384,15 +340,10 @@ class IGMC2(GNN):
         if side_features:
             self.lin1 = Linear(2 * sum(latent_dim) + n_side_features, hid_dim)
 
-        self.edge_embd = nn.Embedding(num_relations, latent_dim[0])
-
         self.max_neighbors = max_neighbors
         self.max_walks = max_walks
         self.naive_walking_lin1 = nn.Linear(hid_dim, self.max_neighbors)
         self.lin_edge = nn.Linear(latent_dim[0], 128)
-        # self.edge_embd = nn.Linear(1, 128)
-        # self.lin_embd = nn.Sequential(nn.Linear(256, 256), nn.Tanh())
-        # self.lin_embd2 = nn.Linear(256, 128, bias=False)
 
         ## Apply new embedding and LSTMCell instead of simple Linear
         self.lin_embd = nn.LSTMCell(hid_dim * 2, hid_dim)
@@ -402,10 +353,6 @@ class IGMC2(GNN):
     def naive_reasoning_walking(self, x, edge_index, edge_type, max_walks, start_node, end_node):
         # x: [n_nodes, 128]
         # edge_index: [2: n_edges]
-
-        ## Do something to get start and end nodes
-
-        ## start looping
 
         n_walks = 0
         node = start_node
@@ -513,7 +460,9 @@ class IGMC2(GNN):
             selected_neighbor_softmax = selected_neighbor_softmax.unsqueeze(0)
             selected_node_embd = selected_neighbor_softmax @ x_neighbors
             selected_edge_type = edge_type_[selected_neighbor]
-            selected_edge_embd = self.edge_embd(selected_edge_type.unsqueeze(0).long())
+            if self.scenario in [7, 9, 11, 13]:
+                selected_edge_type = selected_edge_type.long()
+            selected_edge_embd = self.edge_embd(selected_edge_type.unsqueeze(0))
             selected_edge_embd = self.lin_edge(selected_edge_embd)
             ## dùng cơ chế cộng để accumulate hoặc áp dụng memorynet
             total = torch.cat((selected_node_embd, selected_edge_embd), -1)
@@ -570,17 +519,27 @@ class IGMC2(GNN):
                 training=self.training,
             )
 
+        if self.scenario in [8, 10, 12, 14]:
+            edge_type = edge_type.unsqueeze(-1).float()
         edge_embd = self.edge_embd(edge_type)
 
+        ## Extract node feature, RWPE info and global node index
         node_indx, node_subgraph_feat, pe = (
             x[:, :1].long(),
             x[:, 1 : self.node_feat_dim + 1],
             x[:, self.node_feat_dim + 1 :],
         )
-        ## NOTE: Enable the following if scenario 9 -> 12
-        # x = torch.cat((node_subgraph_feat, pe), -1)
-        x = self.lin_node_feat(node_subgraph_feat)
 
+        ## Convert node feat, pe to suitable dim before passing thu GNN layers
+        if self.scenario in [11, 12, 13, 14]:
+            x = torch.cat((node_subgraph_feat, pe), -1)
+            x = self.lin_node_feat(x)
+        elif self.scenario in [7, 8, 9, 10]:
+            x = self.lin_node_feat(node_subgraph_feat)
+        else:
+            raise NotImplementedError()
+
+        ## Pass node feat thru GNN layers
         concat_states = []
         for conv in self.convs:
             x = conv(x, edge_embd, edge_index)
@@ -639,7 +598,7 @@ class IGMC2(GNN):
 
         ## ARR loss
         loss_arr = 0
-        if self.ARR > 0:
+        if self.scenario in [7, 9, 11, 13]:
             loss_arr = torch.sum((self.edge_embd.weight[1:] - self.edge_embd.weight[:-1]) ** 2)
         loss = loss_mse + self.ARR * loss_arr
         if torch.isnan(loss):

@@ -1,3 +1,4 @@
+import argparse
 import os
 
 from loguru import logger
@@ -16,7 +17,10 @@ def flix_dou_yah(dataset, ith, seed, pe_dim, scenario):
 
 
 if __name__ == "__main__":
-    scenario = 3
+    parser = argparse.ArgumentParser(description="Inductive Graph-based Matrix Completion")
+    parser.add_argument("--scenario", type=int)
+
+    args = parser.parse_args()
 
     pe_dims = {
         "ml100k": 50,
@@ -32,6 +36,6 @@ if __name__ == "__main__":
         for ith, seed_val in enumerate(seeds):
             logger.info(f"Test: {ith} - {dataset} - seed: {seed_val:3d}")
 
-            flix_dou_yah(dataset, ith, seed_val, pe_dims[dataset], scenario)
+            flix_dou_yah(dataset, ith, seed_val, pe_dims[dataset], args.scenario)
 
     # python Main.py --data-name yahoo_music --epochs 40 --testing --ensemble --save-appendix _80 --data-appendix _80 --seed 42 --pe-dim 80

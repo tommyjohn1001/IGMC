@@ -2,9 +2,8 @@
 #douban, yahoo_music
 python Main.py --data-name yahoo_music\
     --epochs 40\
-    --data-appendix _pyg2.0\
+    --testing --ensemble\
     --save-appendix _gatedGCN\
-    --testing\
-    --ensemble\
-    --wandb\
-    --pe-dim 20
+    --data-appendix _20\
+    --scenario 1\
+    --pe-dim 20\

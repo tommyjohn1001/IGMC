@@ -10,7 +10,7 @@ import torch
 import torch.nn.functional as F
 import wandb
 from torch.optim import Adam
-from torch_geometric.data import DataLoader
+from torch_geometric.loader import DataLoader
 from torch_geometric.data import DenseDataLoader as DenseLoader
 from tqdm import tqdm
 

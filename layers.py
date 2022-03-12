@@ -33,6 +33,15 @@ class GatedGCNLayer(pyg_nn.conv.MessagePassing):
         self.residual = residual
         self.e = None
 
+    def initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.constant_(m.bias, 0)
+                nn.init.xavier_uniform_(m.weight)
+            elif isinstance(m, nn.BatchNorm1d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+
     def forward(self, x, e, edge_index):
         """
         x               : [n_nodes, in_dim]
@@ -62,9 +71,9 @@ class GatedGCNLayer(pyg_nn.conv.MessagePassing):
             e = e_in + e
 
         x = F.dropout(x, self.dropout, training=self.training)
-        # edge_attr = F.dropout(e, self.dropout, training=self.training)
+        edge_attr = F.dropout(e, self.dropout, training=self.training)
 
-        return x
+        return x, edge_attr
 
     def message(self, Dx_i, Ex_j, Ce):
         """

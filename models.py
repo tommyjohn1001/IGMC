@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import torch_geometric.nn as pyg_nn
 from torch.nn import Linear
 from torch_geometric.utils import dropout_adj
 
@@ -15,7 +16,7 @@ class IGMC(GNN):
         self,
         dataset,
         gconv=GatedGCNLayer,
-        latent_dim=[32, 32, 32, 32],
+        latent_dim=None,
         num_relations=5,
         num_bases=2,
         regression=False,
@@ -32,25 +33,18 @@ class IGMC(GNN):
             dataset, gconv, latent_dim, regression, adj_dropout, force_undirected
         )
 
+        if latent_dim is None:
+            latent_dim = [32, 32, 32, 32]
+
         self.multiply_by = multiply_by
         self.scenario = scenario
 
         ## Declare modules to convert edge index to hidden edge vector
-        if self.scenario in [1, 3, 5]:
-            self.edge_embd = nn.Embedding(num_relations, latent_dim[0])
-        elif self.scenario in [2, 4, 6]:
-            self.edge_embd = nn.Linear(1, latent_dim[0])
-        else:
-            raise NotImplementedError()
+        self.edge_embd = nn.Linear(1, latent_dim[0])
 
         ## Declare modules to convert node feat, pe to hidden vectors
         self.node_feat_dim = dataset.num_features - pe_dim - 1
-        if self.scenario in [1, 2]:
-            self.lin_node_feat = nn.Linear(self.node_feat_dim, latent_dim[0])
-        elif self.scenario in [3, 4, 5, 6]:
-            self.lin_node_feat = nn.Linear(self.node_feat_dim + pe_dim, latent_dim[0])
-        else:
-            raise NotImplementedError()
+        self.lin_node_feat = nn.Linear(self.node_feat_dim + pe_dim, latent_dim[0])
 
         ## Declare GNN layers
         self.convs = torch.nn.ModuleList()
@@ -63,9 +57,26 @@ class IGMC(GNN):
         if side_features:
             self.lin1 = Linear(2 * sum(latent_dim) + n_side_features, 128)
 
+        self.graphsizenorm = pyg_nn.norm.graph_size_norm.GraphSizeNorm()
+
+        ## init weights
+        self.initialize_weights()
+
+    def initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.constant_(m.bias, 0)
+                nn.init.xavier_uniform_(m.weight)
+            elif isinstance(m, nn.BatchNorm1d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+            elif isinstance(m, GatedGCNLayer):
+                m.initialize_weights()
+
     def forward(self, data):
 
         x, edge_index, edge_type, batch = data.x, data.edge_index, data.edge_type, data.batch
+
         if self.adj_dropout > 0:
             edge_index, edge_type = dropout_adj(
                 edge_index,
@@ -76,8 +87,7 @@ class IGMC(GNN):
                 training=self.training,
             )
 
-        if self.scenario in [2,4,6]:
-            edge_type = edge_type.unsqueeze(-1).float()
+        edge_type = edge_type.unsqueeze(-1).float()
         edge_embd = self.edge_embd(edge_type)
 
         ## Extract node feature, RWPE info and global node index
@@ -88,18 +98,17 @@ class IGMC(GNN):
         )
 
         ## Convert node feat, pe to suitable dim before passing thu GNN layers
-        if self.scenario in [3, 4, 5, 6]:
-            x = torch.cat((node_subgraph_feat, pe), -1)
-            x = self.lin_node_feat(x)
-        elif self.scenario in [1, 2]:
-            x = self.lin_node_feat(node_subgraph_feat)
-        else:
-            raise NotImplementedError()
+        x = torch.cat((node_subgraph_feat, pe), -1)
+        x = self.lin_node_feat(x)
+
+        ## Apply graph size norm
+        if self.scenario in [3, 4]:
+            x = self.graphsizenorm(x, batch)
 
         ## Pass node feat thru GNN layers
         concat_states = []
         for conv in self.convs:
-            x = conv(x, edge_embd, edge_index)
+            x, edge_embd = conv(x, edge_embd, edge_index)
             concat_states.append(x)
         concat_states = torch.cat(concat_states, 1)
 

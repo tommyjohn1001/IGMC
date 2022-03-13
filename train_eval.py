@@ -10,8 +10,8 @@ import torch
 import torch.nn.functional as F
 import wandb
 from torch.optim import Adam
-from torch_geometric.loader import DataLoader
-from torch_geometric.data import DenseDataLoader as DenseLoader
+# from torch_geometric.data import DataLoader ## Only use if using newer pyg version
+from torch_geometric.data import DataLoader, DenseDataLoader as DenseLoader
 from tqdm import tqdm
 
 matplotlib.use("Agg")
@@ -94,12 +94,11 @@ def train_multiple_epochs(train_dataset,
             'train_loss': train_loss,
             'test_rmse': rmses[-1],
         }
-        if not batch_pbar:
-            pbar.set_description(
-                'Epoch {}, train loss {:.6f}, test rmse {:.6f}'.format(*eval_info.values())
-            )
-        else:
-            print('Epoch {}, train loss {:.6f}, test rmse {:.6f}'.format(*eval_info.values()))
+        # if not batch_pbar:
+        #     pbar.set_description(
+        #         'Epoch {}, train loss {:.6f}, test rmse {:.6f}'.format(*eval_info.values())
+        #     )
+        print('Epoch {}, train loss {:.6f}, test rmse {:.6f}'.format(*eval_info.values()))
 
         if epoch % lr_decay_step_size == 0:
             for param_group in optimizer.param_groups:

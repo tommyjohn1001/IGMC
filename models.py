@@ -1,7 +1,6 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import torch_geometric.nn as pyg_nn
 from torch.nn import Linear
 from torch_geometric.utils import dropout_adj
 
@@ -15,7 +14,7 @@ class IGMC(GNN):
     def __init__(
         self,
         dataset,
-        gconv=GatedGCNLayer,
+        gconv=None,
         latent_dim=None,
         num_relations=5,
         num_bases=2,
@@ -29,6 +28,13 @@ class IGMC(GNN):
         n_nodes=3000,
         scenario=1,
     ):
+        if scenario in [1,2,3,4]:
+            gconv = GatedGCNLayer
+        elif scenario in [5, 6, 7, 8]:
+            gconv = GatedGCNLSPELayer
+        else:
+            raise NotImplementedError()
+
         super(IGMC, self).__init__(
             dataset, gconv, latent_dim, regression, adj_dropout, force_undirected
         )
@@ -44,7 +50,14 @@ class IGMC(GNN):
 
         ## Declare modules to convert node feat, pe to hidden vectors
         self.node_feat_dim = dataset.num_features - pe_dim - 1
-        self.lin_node_feat = nn.Linear(self.node_feat_dim + pe_dim, latent_dim[0])
+        if scenario in [1,2,3,4]:
+            self.lin_node_feat = nn.Linear(self.node_feat_dim + pe_dim, latent_dim[0])
+        elif scenario in [5, 6, 7, 8]:
+            self.lin_node_feat = nn.Linear(self.node_feat_dim, latent_dim[0])
+            self.lin_pe = nn.Linear(pe_dim, latent_dim[0])
+            self.lin_state = nn.Linear(latent_dim[0] * 2, latent_dim[0])
+        else:
+            raise NotImplementedError()
 
         ## Declare GNN layers
         self.convs = torch.nn.ModuleList()
@@ -57,7 +70,7 @@ class IGMC(GNN):
         if side_features:
             self.lin1 = Linear(2 * sum(latent_dim) + n_side_features, 128)
 
-        self.graphsizenorm = pyg_nn.norm.graph_size_norm.GraphSizeNorm()
+        self.graphsizenorm = GraphSizeNorm()
 
         ## init weights
         self.initialize_weights()
@@ -98,8 +111,15 @@ class IGMC(GNN):
         )
 
         ## Convert node feat, pe to suitable dim before passing thu GNN layers
-        x = torch.cat((node_subgraph_feat, pe), -1)
-        x = self.lin_node_feat(x)
+        if self.scenario in [1,2,3,4]:
+            x = torch.cat((node_subgraph_feat, pe), -1)
+            x = self.lin_node_feat(x)
+        elif self.scenario in [5, 6, 7, 8]:
+            x = self.lin_node_feat(node_subgraph_feat)
+            pe = self.lin_pe(pe)
+        else:
+            raise NotImplementedError()
+        
 
         ## Apply graph size norm
         if self.scenario in [3, 4]:
@@ -108,9 +128,22 @@ class IGMC(GNN):
         ## Pass node feat thru GNN layers
         concat_states = []
         for conv in self.convs:
-            x, edge_embd = conv(x, edge_embd, edge_index)
-            concat_states.append(x)
+            if self.scenario in [1,2,3,4]:
+                x, edge_embd = conv(x, edge_embd, edge_index)
+                state = x
+            elif self.scenario in [5, 6, 7, 8]:
+                x, edge_embd, pe = conv(x, edge_embd, edge_index, pe)
+                state = self.lin_state(torch.cat((x, pe), dim=-1))
+            else:
+                raise NotImplementedError()
+
+            concat_states.append(state)
         concat_states = torch.cat(concat_states, 1)
+
+        ## NOTE: Use this
+        ## Apply graph size norm
+        # if self.scenario in [3, 4]:
+        #     x = self.graphsizenorm(x, batch)
 
         users = data.x[:, 1] == 1
         items = data.x[:, 2] == 1

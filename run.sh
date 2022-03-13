@@ -3,7 +3,7 @@
 python Main.py --data-name yahoo_music\
     --epochs 40\
     --testing --ensemble\
-    --save-appendix _gatedGCN\
+    --save-appendix _gatedGCN_20_6\
     --data-appendix _20\
-    --scenario 1\
     --pe-dim 20\
+    --scenario 6\

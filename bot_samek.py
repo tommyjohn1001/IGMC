@@ -1,11 +1,14 @@
 import argparse
 import os
 import random
+from datetime import datetime, timedelta
 
 SEED = random.randint(0, 1000)
 
 
 def flix_dou_yah(dataset, pe_dim, scenario):
+    now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H:%M")
+
     os.system(
         f"python Main.py --data-name {dataset} --epochs 40\
             --testing --ensemble\
@@ -13,8 +16,8 @@ def flix_dou_yah(dataset, pe_dim, scenario):
             --data-appendix _{pe_dim}\
             --seed {SEED}\
             --pe-dim {pe_dim}\
-            --scenario {scenario} > logs/{dataset}_{pe_dim}_{scenario}.log"
-            # --wandb
+            --scenario {scenario} > logs/{dataset}_{scenario}_{pe_dim}_{now}.log"
+        # --wandb
     )
 
 

@@ -1,12 +1,9 @@
 import math
 
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
-import torch_geometric.nn as pyg_nn
+from all_packages import *
 from torch.nn import Conv1d, Linear
 from torch_geometric.nn import GCNConv, RGCNConv, global_add_pool, global_sort_pool
-from torch_geometric.utils import dropout_adj
+from torch_geometric.utils import degree, dropout_adj
 from torch_scatter import scatter
 from util_functions import *
 
@@ -31,6 +28,15 @@ class GatedGCNLayer(pyg_nn.conv.MessagePassing):
         self.dropout = dropout
         self.residual = residual
         self.e = None
+
+    def initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.constant_(m.bias, 0)
+                nn.init.xavier_uniform_(m.weight)
+            elif isinstance(m, nn.BatchNorm1d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
 
     def forward(self, x, e, edge_index):
         """
@@ -61,9 +67,9 @@ class GatedGCNLayer(pyg_nn.conv.MessagePassing):
             e = e_in + e
 
         x = F.dropout(x, self.dropout, training=self.training)
-        # edge_attr = F.dropout(e, self.dropout, training=self.training)
+        edge_attr = F.dropout(e, self.dropout, training=self.training)
 
-        return x
+        return x, edge_attr
 
     def message(self, Dx_i, Ex_j, Ce):
         """
@@ -104,6 +110,136 @@ class GatedGCNLayer(pyg_nn.conv.MessagePassing):
         x = Ax + aggr_out
         e_out = self.e
         del self.e
+        return x, e_out
+
+
+class GatedGCNLSPELayer(pyg_nn.conv.MessagePassing):
+    """
+    GatedGCN layer
+    Residual Gated Graph ConvNets
+    https://arxiv.org/pdf/1711.07553.pdf
+    """
+
+    def __init__(self, in_dim, out_dim, dropout=0.1, residual=True, **kwargs):
+        super().__init__(**kwargs)
+        self.A = nn.Linear(in_dim * 2, out_dim, bias=True)
+        self.B = nn.Linear(in_dim * 2, out_dim, bias=True)
+        self.D = nn.Linear(in_dim * 2, out_dim, bias=True)
+        self.E = nn.Linear(in_dim * 2, out_dim, bias=True)
+        self.Ap = nn.Linear(in_dim, out_dim, bias=True)
+        self.Bp = nn.Linear(in_dim, out_dim, bias=True)
+        self.Dp = nn.Linear(in_dim, out_dim, bias=True)
+        self.Ep = nn.Linear(in_dim, out_dim, bias=True)
+        self.C = nn.Linear(in_dim, out_dim, bias=True)
+
+        self.bn_node_x = nn.BatchNorm1d(out_dim)
+        self.bn_edge_e = nn.BatchNorm1d(out_dim)
+        self.dropout = dropout
+        self.residual = residual
+
+        self.e = None
+        self.sigma_ij = None
+
+    def initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.constant_(m.bias, 0)
+                nn.init.xavier_uniform_(m.weight)
+            elif isinstance(m, nn.BatchNorm1d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+
+    def forward(self, x, e, edge_index, pe):
+        """
+        x               : [n_nodes, in_dim]
+        e               : [n_edges, in_dim]
+        edge_index      : [2, n_edges]
+        """
+        if self.residual:
+            x_in = x
+            e_in = e
+            pe_in = pe
+
+        Ax = self.A(torch.cat((x, pe), dim=-1))
+        Bx = self.B(torch.cat((x, pe), dim=-1))
+        Dx = self.D(torch.cat((x, pe), dim=-1))
+        Ex = self.E(torch.cat((x, pe), dim=-1))
+        Ce = self.C(e)
+        Ape = self.Ap(pe)
+        Bpe = self.Bp(pe)
+        Dpe = self.Dp(pe)
+        Epe = self.Ep(pe)
+
+        x, e = self.propagate(edge_index, Bx=Bx, Dx=Dx, Ex=Ex, Ce=Ce, e=e, Ax=Ax, is_pe=False)
+        pe, _ = self.propagate(edge_index, Bx=Bpe, Dx=Dpe, Ex=Epe, Ce=Ce, e=e, Ax=Ape, is_pe=True)
+
+        x = self.bn_node_x(x)
+        e = self.bn_edge_e(e)
+
+        x = F.relu(x)
+        e = F.relu(e)
+        pe = torch.tanh(pe)
+
+        if self.residual:
+            x, e, pe = x_in + x, e_in + e, pe_in + pe
+
+        x = F.dropout(x, self.dropout, training=self.training)
+        edge_attr = F.dropout(e, self.dropout, training=self.training)
+        pe = F.dropout(pe, self.dropout, training=self.training)
+
+        return x, edge_attr, pe
+
+    def message(self, Dx_i, Ex_j, Ce, is_pe):
+        """
+        {}x_i           : [n_edges, out_dim]
+        {}x_j           : [n_edges, out_dim]
+        {}e             : [n_edges, out_dim]
+        """
+
+        e_ij = Dx_i + Ex_j + Ce
+        sigma_ij = torch.sigmoid(e_ij)
+        self.e = e_ij
+
+        if not is_pe:
+            self.sigma_ij = sigma_ij
+
+        return sigma_ij
+
+    def aggregate(self, sigma_ij, index, Bx_j, Bx, is_pe):
+        """
+        sigma_ij        : [n_edges, out_dim]  ; is the output from message() function
+        index           : [n_edges]
+        {}x_j           : [n_edges, out_dim]
+        """
+        if is_pe:
+            sigma_ij = self.sigma_ij
+
+        dim_size = Bx.shape[0]  # or None ??   <--- Double check this
+
+        sum_sigma_x = sigma_ij * Bx_j
+        numerator_eta_xj = scatter(sum_sigma_x, index, 0, None, dim_size, reduce="sum")
+
+        sum_sigma = sigma_ij
+        denominator_eta_xj = scatter(sum_sigma, index, 0, None, dim_size, reduce="sum")
+
+        out = numerator_eta_xj / (denominator_eta_xj + 1e-6)
+
+        if is_pe:
+            del self.sigma_ij
+
+        return out
+
+    def update(self, aggr_out, Ax):
+        """
+        aggr_out        : [n_nodes, out_dim] ; is the output from aggregate() function after the aggregation
+        {}x             : [n_nodes, out_dim]
+        """
+
+        x = Ax + aggr_out
+        e_out = self.e
+
+        del self.e
+
         return x, e_out
 
 
@@ -296,3 +432,25 @@ class DGCNN_RS(DGCNN):
             return x[:, 0]
         else:
             return F.log_softmax(x, dim=-1)
+
+
+class GraphSizeNorm(nn.Module):
+    r"""Applies Graph Size Normalization over each individual graph in a batch
+    of node features as described in the
+    `"Benchmarking Graph Neural Networks" <https://arxiv.org/abs/2003.00982>`_
+    paper
+
+    .. math::
+        \mathbf{x}^{\prime}_i = \frac{\mathbf{x}_i}{\sqrt{|\mathcal{V}|}}
+    """
+
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x, batch=None):
+        """"""
+        if batch is None:
+            batch = torch.zeros(x.size(0), dtype=torch.long, device=x.device)
+
+        inv_sqrt_deg = degree(batch, dtype=x.dtype).pow(-0.5)
+        return x * inv_sqrt_deg.index_select(0, batch).view(-1, 1)

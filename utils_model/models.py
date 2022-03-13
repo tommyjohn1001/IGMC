@@ -300,31 +300,34 @@ class IGMC2(GNN):
         n_nodes=3000,
         scenario=1,
     ):
+        if scenario in [9, 10, 11, 12]:
+            gconv = GatedGCNLayer
+        elif scenario in [13, 14, 15, 16]:
+            gconv = GatedGCNLSPELayer
+        else:
+            raise NotImplementedError()
+
         super(IGMC2, self).__init__(
-            dataset, GCNConv, latent_dim, regression, adj_dropout, force_undirected
+            dataset, gconv, latent_dim, regression, adj_dropout, force_undirected
         )
 
         self.batch_size = batch_size
-        self.ARR = ARR
         self.num_relations = num_relations
         self.temperature = temperature
         self.map_edgetype2id = {v: i for i, v in enumerate(class_values)}
         self.scenario = scenario
         self.multiply_by = multiply_by
 
-        if self.scenario in [7, 9, 11, 13]:
-            self.edge_embd = nn.Embedding(num_relations, latent_dim[0])
-        elif self.scenario in [8, 10, 12, 14]:
-            self.edge_embd = nn.Linear(1, latent_dim[0])
-        else:
-            raise NotImplementedError()
+        self.edge_embd = nn.Linear(1, latent_dim[0])
 
         ## Declare modules to convert node feat, pe to hidden vectors
         self.node_feat_dim = dataset.num_features - pe_dim - 1
-        if self.scenario in [7, 8, 9, 10]:
-            self.lin_node_feat = nn.Linear(self.node_feat_dim, latent_dim[0])
-        elif self.scenario in [11, 12, 13, 14]:
+        if self.scenario in [9, 10, 11, 12]:
             self.lin_node_feat = nn.Linear(self.node_feat_dim + pe_dim, latent_dim[0])
+        elif self.scenario in [13, 14, 15, 16]:
+            self.lin_node_feat = nn.Linear(self.node_feat_dim, latent_dim[0])
+            self.lin_pe = nn.Linear(pe_dim, latent_dim[0])
+            self.lin_state = nn.Linear(latent_dim[0] * 2, latent_dim[0])
         else:
             raise NotImplementedError()
 
@@ -349,6 +352,22 @@ class IGMC2(GNN):
         self.lin_embd = nn.LSTMCell(hid_dim * 2, hid_dim)
 
         self.contrastive_criterion = CustomContrastiveLoss(self.temperature, num_relations)
+
+        self.graphsizenorm = GraphSizeNorm()
+
+        ## init weights
+        self.initialize_weights()
+
+    def initialize_weights(self):
+        for m in self.modules():
+            if isinstance(m, nn.Linear):
+                nn.init.constant_(m.bias, 0)
+                nn.init.xavier_uniform_(m.weight)
+            elif isinstance(m, nn.BatchNorm1d):
+                nn.init.constant_(m.weight, 1)
+                nn.init.constant_(m.bias, 0)
+            elif isinstance(m, (GatedGCNLayer, GatedGCNLSPELayer)):
+                m.initialize_weights()
 
     def naive_reasoning_walking(self, x, edge_index, edge_type, max_walks, start_node, end_node):
         # x: [n_nodes, 128]
@@ -460,8 +479,6 @@ class IGMC2(GNN):
             selected_neighbor_softmax = selected_neighbor_softmax.unsqueeze(0)
             selected_node_embd = selected_neighbor_softmax @ x_neighbors
             selected_edge_type = edge_type_[selected_neighbor]
-            if self.scenario in [7, 9, 11, 13]:
-                selected_edge_type = selected_edge_type.long()
             selected_edge_embd = self.edge_embd(selected_edge_type.unsqueeze(0))
             selected_edge_embd = self.lin_edge(selected_edge_embd)
             ## dùng cơ chế cộng để accumulate hoặc áp dụng memorynet
@@ -519,8 +536,7 @@ class IGMC2(GNN):
                 training=self.training,
             )
 
-        if self.scenario in [8, 10, 12, 14]:
-            edge_type = edge_type.unsqueeze(-1).float()
+        edge_type = edge_type.unsqueeze(-1).float()
         edge_embd = self.edge_embd(edge_type)
 
         ## Extract node feature, RWPE info and global node index
@@ -531,20 +547,39 @@ class IGMC2(GNN):
         )
 
         ## Convert node feat, pe to suitable dim before passing thu GNN layers
-        if self.scenario in [11, 12, 13, 14]:
+        if self.scenario in [9, 10, 11, 12]:
             x = torch.cat((node_subgraph_feat, pe), -1)
             x = self.lin_node_feat(x)
-        elif self.scenario in [7, 8, 9, 10]:
+        elif self.scenario in [13, 14, 15, 16]:
             x = self.lin_node_feat(node_subgraph_feat)
+            pe = self.lin_pe(pe)
         else:
             raise NotImplementedError()
+
+        ## Apply graph size norm
+        if self.scenario in [11, 12, 15, 16]:
+            x = self.graphsizenorm(x, batch)
 
         ## Pass node feat thru GNN layers
         concat_states = []
         for conv in self.convs:
-            x = conv(x, edge_embd, edge_index)
-            concat_states.append(x)
+            if self.scenario in [9, 10, 11, 12]:
+                x, edge_embd = conv(x, edge_embd, edge_index)
+                state = x
+            elif self.scenario in [13, 14, 15, 16]:
+                x, edge_embd, pe = conv(x, edge_embd, edge_index, pe)
+                state = self.lin_state(torch.cat((x, pe), dim=-1))
+            else:
+                raise NotImplementedError()
+
+            concat_states.append(state)
+
         concat_states = torch.cat(concat_states, 1)
+
+        ## NOTE: Use this
+        ## Apply graph size norm
+        # if self.scenario in [11, 12, 15, 16]:
+        #     x = self.graphsizenorm(x, batch)
 
         ## Lọc ra vị trí user của các batch, user này là user cần predict link, chứ không phải user's neighbor
         users = data.x[:, 1] == 1
@@ -591,21 +626,13 @@ class IGMC2(GNN):
         x = self.lin2(x)
 
         ## Calculate loss
-        loss = 0
+        loss = F.mse_loss(x[:, 0] * self.multiply_by, data.y.view(-1))
 
-        ## MSE loss
-        loss_mse = F.mse_loss(x[:, 0] * self.multiply_by, data.y.view(-1))
-
-        ## ARR loss
-        loss_arr = 0
-        if self.scenario in [7, 9, 11, 13]:
-            loss_arr = torch.sum((self.edge_embd.weight[1:] - self.edge_embd.weight[:-1]) ** 2)
-        loss = loss_mse + self.ARR * loss_arr
         if torch.isnan(loss):
-            print(f"NaN: {loss_mse} - {loss_arr}")
+            print(f"NaN: {loss}")
             sys.exit(1)
         if loss < 0:
-            print(f"below 0: {loss_mse} - {loss_arr}")
+            print(f"below 0: {loss}")
 
         return x[:, 0], loss
 

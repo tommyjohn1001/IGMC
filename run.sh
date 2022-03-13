@@ -1,30 +1,16 @@
-#!/bin/bash
-
-## 1. Install env
-# pip install torch==1.7.1+cu110 -f https://download.pytorch.org/whl/torch_stable.html
-
-# TORCH=1.7.1
-# CUDA=cu110
-# pip install torch-scatter -f https://data.pyg.org/whl/torch-${TORCH}+${CUDA}.html
-# pip install torch-sparse -f https://data.pyg.org/whl/torch-${TORCH}+${CUDA}.html
-# pip install -U torch-geometric==1.5.5
-
-# pip install loguru black isort jupyterlab spacy numpy h5py
-
-## 2. Train
-
-## Train with dataset Flixster
-# python train.py --data-name flixster --exp_name nrw -g 0 --wandb --version 1 --combine_trainval
-
-# python train.py --data-name douban --exp_name nrw -g 0 --wandb --version 1 --combine_trainval
-
-# python train.py --data-name yahoo_music --exp_name nrw -g 1 --wandb --version 1 --combine_trainval
-
-## Train with dataset MovieLens-100k
-# python train.py --data-name ml_100k --exp_name nrw -g 0 --wandb --version 1 --combine_trainval
-
-# python train.py --data-name ml_1m --exp_name nrw -g 0 --wandb --version 1 --combine_trainval
+#/bin/bash
+#douban, yahoo_music
+python train.py\
+    --data-name yahoo_music\
+    -g 0 --version 2\
+    --save-appendix _gatedGCN_20_11\
+    --data-appendix _20\
+    --pe-dim 20\
+    --scenario 15
 
 
-## 3. Tune
-# python tune.py --data-name yahoo_music --exp_name nrw -g 1 --version 1
+
+# CUDA_VISIBLE_DEVICES=1 python bot_samek.py --scenario 1 & CUDA_VISIBLE_DEVICES=2 python bot_samek.py --scenario 3
+# CUDA_VISIBLE_DEVICES=1 python bot_diffk.py --scenario 2 & CUDA_VISIBLE_DEVICES=2 python bot_diffk.py --scenario 4
+# CUDA_VISIBLE_DEVICES=1 python bot_samek.py --scenario 5 & CUDA_VISIBLE_DEVICES=2 python bot_samek.py --scenario 7
+# CUDA_VISIBLE_DEVICES=1 python bot_diffk.py --scenario 6 & CUDA_VISIBLE_DEVICES=2 python bot_diffk.py --scenario 8

@@ -58,4 +58,4 @@ if __name__ == "__main__":
     logger.info("Start predicting...")
 
     rmse = final_test_model(path_dir_ckpt, lit_model, trainer_eval, test_loader)
-    logger.info(f"Final ensemble RMSE: {rmse:4f}")
+    print(f"Final ensemble RMSE: {rmse:4f}")

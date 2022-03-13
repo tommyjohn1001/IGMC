@@ -1,3 +1,9 @@
+## Mar 13 | 15:37
+
+- Add `GatedGCNLSPELayer` and modify `GatedGCNLayer`
+- Add **glorot initialization**
+- Add **graph size norm**
+
 ## Dec 3, 00:06
 
 - Add some arguments

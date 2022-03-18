@@ -309,6 +309,18 @@ def load_data_monti(dataset, testing=False, rating_map=None, post_rating_map=Non
         train_labels = np.hstack([train_labels, val_labels])
         # for adjacency matrix construction
         train_idx = np.hstack([train_idx, val_idx])
+    else:
+        len_test = len(u_test_idx)
+        
+
+        u_train_idx = np.hstack([u_train_idx, u_val_idx[len_test:]])
+        v_train_idx = np.hstack([v_train_idx, v_val_idx[len_test:]])
+        train_labels = np.hstack([train_labels, val_labels[len_test:]])
+        # for adjacency matrix construction
+        train_idx = np.hstack([train_idx, val_idx[len_test:]])
+
+        
+        u_val_idx, v_val_idx, val_labels, val_idx = u_val_idx[:len_test], v_val_idx[:len_test], val_labels[:len_test], val_idx[:len_test]
 
     class_values = np.sort(np.unique(ratings))
 

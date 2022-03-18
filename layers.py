@@ -247,18 +247,242 @@ class GatedGCNLSPELayer(pyg_nn.conv.MessagePassing):
         return x, e_out
 
 
+def masked_edge_index(edge_index, edge_mask):
+    if isinstance(edge_index, Tensor):
+        return edge_index[:, edge_mask]
+
+    return masked_select_nnz(edge_index, edge_mask, layout="coo")
+
+
+class RGatedGCNLayer(pyg_nn.conv.MessagePassing):
+    """Implementation for Relational Gated Graph ConvNets.
+    Currently, only Basis-decomposition regularization is usable
+
+    """
+
+    def __init__(
+        self,
+        in_channels: Union[int, Tuple[int, int]],
+        out_channels: int,
+        num_relations: int,
+        dropout: float = 0.1,
+        residual: bool = True,
+        num_bases: Optional[int] = None,
+        num_blocks: Optional[int] = None,
+        **kwargs
+    ):
+        super().__init__(**kwargs)
+
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.num_relations = num_relations
+        self.num_bases = num_bases
+        self.num_blocks = num_blocks
+
+        self.weight = nn.Parameter(torch.Tensor(num_bases, out_channels, out_channels))
+        self.comp = nn.Parameter(torch.Tensor(num_relations, num_bases))
+
+        self.A = nn.Linear(in_channels, out_channels, bias=True)
+        self.B = nn.Linear(in_channels, out_channels, bias=True)
+        self.D = nn.Linear(in_channels, out_channels, bias=True)
+        self.E = nn.Linear(in_channels, out_channels, bias=True)
+
+        self.bn_node_x = nn.BatchNorm1d(out_channels)
+        self.dropout = dropout
+        self.residual = residual
+
+        self.register_parameter("root", None)
+        self.register_parameter("bias", None)
+
+        ## Initialize
+        self.reset_parameters()
+
+    def reset_parameters(self):
+        glorot(self.weight)
+        glorot(self.comp)
+        glorot(self.root)
+        zeros(self.bias)
+
+    def message(self, Dx_i, Ex_j):
+        """
+        {}x_i           : [n_edges, out_channels]
+        {}x_j           : [n_edges, out_channels]
+        {}e             : [n_edges, out_channels]
+        """
+
+        e_ij = Dx_i + Ex_j
+        sigma_ij = torch.sigmoid(e_ij)
+
+        return sigma_ij
+
+    def aggregate(self, sigma_ij, index, Bx_j, Bx):
+        """
+        sigma_ij        : [n_edges, out_channels]  ; is the output from message() function
+        index           : [n_edges]
+        {}x_j           : [n_edges, out_channels]
+        """
+
+        dim_size = Bx.shape[0]  # or None ??   <--- Double check this
+
+        sum_sigma_x = sigma_ij * Bx_j
+        # # fmt: off
+        # import ipdb; ipdb.set_trace()
+        # # fmt: on
+        numerator_eta_xj = scatter(sum_sigma_x, index, 0, None, dim_size, reduce="sum")
+
+        sum_sigma = sigma_ij
+        denominator_eta_xj = scatter(sum_sigma, index, 0, None, dim_size, reduce="sum")
+
+        out = numerator_eta_xj / (denominator_eta_xj + 1e-6)
+
+        return out
+
+    def forward(self, x, edge_index, edge_type):
+        r"""
+        Args:
+            x: The input node features.
+            edge_type: The one-dimensional relation type/index for each edge in
+
+        """
+
+        device = x.device
+
+        if self.residual:
+            x_in = x
+
+        ##########################################
+        ## Firstly project to same output dim
+        ##########################################
+        Ax, Bx, Dx, Ex = self.A(x), self.B(x), self.D(x), self.E(x)
+
+        ##########################################
+        ## Start propagation
+        ##########################################
+        out = torch.zeros(x.size(0), self.out_channels, device=device)
+        weight = self.weight
+        if self.num_bases is not None:
+            weight = (self.comp @ weight.view(self.num_bases, -1)).view(
+                self.num_relations, self.out_channels, self.out_channels
+            )
+
+        for i in range(self.num_relations):
+            masked_edge_indx = masked_edge_index(edge_index, edge_type == i)
+
+            # # fmt: off
+            # import ipdb; ipdb.set_trace()
+            # # fmt: on
+
+            # h = self.propagate(masked_edge_indx, Bx=Bx, Dx=Dx, Ex=Ex, Ax=Ax)
+            h = self.propagate(masked_edge_indx, Bx=Ax, Dx=Ax, Ex=Ax, Ax=Ax)
+            out = out + (h @ weight[i])
+
+        ##########################################
+        ## Apply BN, activation and residual
+        ##########################################
+        x = self.bn_node_x(out)
+        x = torch.relu(x)
+
+        # if self.residual:
+        #     x = x_in + x
+
+        x = F.dropout(x, self.dropout, training=self.training)
+
+        ##########################################
+        ## output
+        ##########################################
+
+        return x
+
+    def update(self, aggr_out, Ax):
+        """
+        aggr_out        : [n_nodes, out_channels] ; is the output from aggregate() function after the aggregation
+        {}x             : [n_nodes, out_channels]
+        """
+
+        x = Ax + aggr_out
+
+        return x
+
+
+class FastRGatedGCNLayer(RGatedGCNLayer):
+    def forward(self, x, edge_index, edge_type):
+        r"""
+        Args:
+            x: The input node features.
+            edge_type: The one-dimensional relation type/index for each edge in
+
+        """
+
+        if self.residual:
+            x_in = x
+
+        ##########################################
+        ## Firstly project to same output dim
+        ##########################################
+        Ax, Bx, Dx, Ex = self.A(x), self.B(x), self.D(x), self.E(x)
+
+        ##########################################
+        ## Start propagation
+        ##########################################
+        out = self.propagate(edge_index, Bx=Bx, Dx=Dx, Ex=Ex, Ax=Ax, edge_type=edge_type)
+
+        ##########################################
+        ## Apply BN, activation and residual
+        ##########################################
+        x = self.bn_node_x(out)
+        x = torch.relu(x)
+
+        if self.residual:
+            x = x_in + x
+
+        x = F.dropout(x, self.dropout, training=self.training)
+
+        ##########################################
+        ## output
+        ##########################################
+
+        return x
+
+    def message(self, Dx_i, Ex_j, edge_type):
+        e_ij = Dx_i + Ex_j
+        sigma_ij = torch.sigmoid(e_ij)
+
+        weight = self.weight
+        if self.num_bases is not None:
+            weight = (self.comp @ weight.view(self.num_bases, -1)).view(
+                self.num_relations, self.out_channels, self.out_channels
+            )
+
+        return torch.bmm(sigma_ij.unsqueeze(-2), weight[edge_type]).squeeze(-2)
+
+    def aggregate(self, sigma_ij, index, Bx_j, Bx, dim_size, edge_type):
+        out = super().aggregate(sigma_ij, index, Bx_j, Bx)
+
+        # # fmt: off
+        # import ipdb; ipdb.set_trace()
+        # # fmt: on
+
+        # return scatter(out, index, dim=self.node_dim, dim_size=dim_size)
+
+        return out
+
+
 class GNN(torch.nn.Module):
     # a base GNN class, GCN message passing + sum_pooling
     def __init__(
         self,
         dataset,
         gconv=GatedGCNLayer,
-        latent_dim=[32, 32, 32, 1],
+        latent_dim=None,
         regression=False,
         adj_dropout=0.2,
         force_undirected=False,
     ):
         super(GNN, self).__init__()
+
+        if latent_dim is None:
+            latent_dim = [32, 32, 32, 1]
+
         self.regression = regression
         self.adj_dropout = adj_dropout
         self.force_undirected = force_undirected
@@ -313,12 +537,16 @@ class DGCNN(GNN):
         self,
         dataset,
         gconv=GCNConv,
-        latent_dim=[32, 32, 32, 1],
+        latent_dim=None,
         k=30,
         regression=False,
         adj_dropout=0.2,
         force_undirected=False,
     ):
+
+        if latent_dim is None:
+            latent_dim = [32, 32, 32, 1]
+
         super(DGCNN, self).__init__(
             dataset, gconv, latent_dim, regression, adj_dropout, force_undirected
         )
@@ -384,7 +612,7 @@ class DGCNN_RS(DGCNN):
         self,
         dataset,
         gconv=RGCNConv,
-        latent_dim=[32, 32, 32, 1],
+        latent_dim=None,
         k=30,
         num_relations=5,
         num_bases=2,
@@ -392,6 +620,9 @@ class DGCNN_RS(DGCNN):
         adj_dropout=0.2,
         force_undirected=False,
     ):
+        if latent_dim is None:
+            latent_dim = [32, 32, 32, 1]
+         
         super(DGCNN_RS, self).__init__(
             dataset,
             GCNConv,

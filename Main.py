@@ -10,12 +10,16 @@ import traceback
 import warnings
 from datetime import datetime, timedelta
 from shutil import copy, copytree, rmtree
-
+from glob import glob
 import dotenv
 import numpy as np
 import scipy.io as sio
 import scipy.sparse as ssp
+from loguru import logger as logu
 import torch
+import re
+import numpy as np
+
 
 import wandb
 from data_utils import *
@@ -35,22 +39,64 @@ def warn_with_traceback(message, category, filename, lineno, file=None, line=Non
 
 warnings.showwarning = warn_with_traceback
 
+SEED = random.randint(0, 1000)
+
+torch.manual_seed(SEED)
+torch.cuda.manual_seed(SEED)
+np.random.seed(SEED)
+
+logu.info(f"SEED: {SEED}")
+
+class KeepBest:
+    def __init__(self, k) -> None:
+        self._queue = []
+        self._K = k
+
+    def add(self, test_rmse, model, model_name):
+        queue_i = 0
+        for queue_i, ckpt in enumerate(self._queue):
+            if test_rmse < ckpt['rmse']:
+                break
+
+        if queue_i == self._K:
+            return
+
+        self._queue.insert(queue_i, {'rmse': test_rmse, 'path': model_name})
+        if model is not None:
+            torch.save(model.state_dict(), model_name)
+
+        ## remove items out of top K
+        for ckpt in self._queue[self._K:]:
+            os.remove(ckpt['path'])
+
+        self._queue = self._queue[:self._K]
+
+best = KeepBest(5)
 
 def logger(info, model, optimizer):
     epoch, train_loss, test_rmse = info['epoch'], info['train_loss'], info['test_rmse']
     with open(os.path.join(args.res_dir, 'log.txt'), 'a') as f:
         f.write('Epoch {}, train loss {:.4f}, test rmse {:.6f}\n'.format(
             epoch, train_loss, test_rmse))
-    if type(epoch) == int and epoch % args.save_interval == 0:
+    # if type(epoch) == int and epoch % args.save_interval == 0:
+    #     print('Saving model states...')
+    #     model_name = os.path.join(args.res_dir, 'model_checkpoint{}.pth'.format(epoch))
+    #     optimizer_name = os.path.join(
+    #         args.res_dir, 'optimizer_checkpoint{}.pth'.format(epoch)
+    #     )
+    #     if model is not None:
+    #         torch.save(model.state_dict(), model_name)
+    #     if optimizer is not None:
+    #         torch.save(optimizer.state_dict(), optimizer_name)
+
+    if int(epoch) > 1:
         print('Saving model states...')
-        model_name = os.path.join(args.res_dir, 'model_checkpoint{}.pth'.format(epoch))
+        model_name = os.path.join(args.res_dir, f"model_checkpoint_{epoch}_{info['test_rmse']:.3f}.pth")
         optimizer_name = os.path.join(
             args.res_dir, 'optimizer_checkpoint{}.pth'.format(epoch)
         )
-        if model is not None:
-            torch.save(model.state_dict(), model_name)
-        if optimizer is not None:
-            torch.save(optimizer.state_dict(), optimizer_name)
+        best.add(info['test_rmse'], model, model_name)
+    
 
 
 # Arguments
@@ -362,15 +408,13 @@ if not args.testing:
         args.pe_dim, 
         max_num=args.max_val_num
     )
+else:
+    val_graphs = test_graphs
 
 # Determine testing data (on which data to evaluate the trained model
-if not args.testing: 
-    test_graphs = val_graphs
 
-print('Used #train graphs: %d, #test graphs: %d' % (
-    len(train_graphs), 
-    len(test_graphs), 
-))
+
+print(f'Used #train graphs: {len(train_graphs)}, #test graphs: {len(test_graphs)} #val graphs: {len(val_graphs)}')
 
 '''
     Train and apply the GNN model
@@ -433,7 +477,7 @@ if args.wandb:
 if not args.no_train:
     train_multiple_epochs(
         train_graphs,
-        test_graphs,
+        val_graphs,
         model,
         args.epochs, 
         args.batch_size, 
@@ -449,63 +493,25 @@ if not args.no_train:
         args=args,
     )
 
-if args.visualize:
-    model.load_state_dict(torch.load(args.model_pos))
-    visualize(
-        model, 
-        test_graphs, 
-        args.res_dir, 
-        args.data_name, 
-        class_values, 
-        sort_by='prediction'
-    )
-    if args.transfer:
-        rmse = test_once(test_graphs, model, args.batch_size, logger)
-        print('Transfer learning rmse is: {:.6f}'.format(rmse))
-else:
-    if args.ensemble:
-        if args.data_name == 'ml_1m':
-            start_epoch, end_epoch, interval = args.epochs-15, args.epochs, 5
-        else: 
-            start_epoch, end_epoch, interval = args.epochs-30, args.epochs, 10
-        if args.transfer:
-            checkpoints = [
-                os.path.join(args.transfer, 'model_checkpoint%d.pth' %x) 
-                for x in range(start_epoch, end_epoch+1, interval)
-            ]
-            epoch_info = 'transfer {}, ensemble of range({}, {}, {})'.format(
-                args.transfer, start_epoch, end_epoch, interval
-            )
-        else:
-            checkpoints = [
-                os.path.join(args.res_dir, 'model_checkpoint%d.pth' %x) 
-                for x in range(start_epoch, end_epoch+1, interval)
-            ]
-            epoch_info = 'ensemble of range({}, {}, {})'.format(
-                start_epoch, end_epoch, interval
-            )
-        rmse = test_once(
-            test_graphs, 
-            model, 
-            args.batch_size, 
-            logger=None, 
-            ensemble=True, 
-            checkpoints=checkpoints
-        )
-        print('Ensemble test rmse is: {:.6f}'.format(rmse))
-    else:
-        if args.transfer:
-            model.load_state_dict(torch.load(args.model_pos))
-            rmse = test_once(test_graphs, model, args.batch_size, logger=None)
-            epoch_info = 'transfer {}, epoch {}'.format(args.transfer, args.epoch)
-        print('Test rmse is: {:.6f}'.format(rmse))
-
-    eval_info = {
-        'epoch': epoch_info,
-        'train_loss': 0,
-        'test_rmse': rmse,
-    }
-    logger(eval_info, None, None)
 
 
+checkpoints = glob(f"{args.res_dir}/model*.pth")
 
+if not args.ensemble:
+    ## only choose best ckpt
+
+    re_rmse = r"\d{1,2}\.\d{3}"
+
+    rmses = [float(re.findall(re_rmse, x)[0]) for x in checkpoints]
+    best_ckpt = rmses.index(min(rmses))
+    checkpoints = [checkpoints[best_ckpt]]
+
+rmse = test_once(
+    test_graphs, 
+    model, 
+    args.batch_size, 
+    logger=None, 
+    ensemble=True, 
+    checkpoints=checkpoints
+)
+print(f"Ensemble test rmse is: {rmse:.6f}")

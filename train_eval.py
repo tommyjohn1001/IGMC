@@ -98,7 +98,7 @@ def train_multiple_epochs(train_dataset,
         #     pbar.set_description(
         #         'Epoch {}, train loss {:.6f}, test rmse {:.6f}'.format(*eval_info.values())
         #     )
-        print('Epoch {}, train loss {:.6f}, test rmse {:.6f}'.format(*eval_info.values()))
+        print('Epoch {}, train loss {:.6f}, val rmse {:.6f}'.format(*eval_info.values()))
 
         if epoch % lr_decay_step_size == 0:
             for param_group in optimizer.param_groups:

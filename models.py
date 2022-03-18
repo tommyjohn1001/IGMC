@@ -28,7 +28,7 @@ class IGMC(GNN):
         n_nodes=3000,
         scenario=1,
     ):
-        if scenario in [1,2,3,4]:
+        if scenario in [1, 2, 3, 4]:
             gconv = GatedGCNLayer
         elif scenario in [5, 6, 7, 8]:
             gconv = GatedGCNLSPELayer
@@ -50,7 +50,7 @@ class IGMC(GNN):
 
         ## Declare modules to convert node feat, pe to hidden vectors
         self.node_feat_dim = dataset.num_features - pe_dim - 1
-        if scenario in [1,2,3,4]:
+        if scenario in [1, 2, 3, 4]:
             self.lin_node_feat = nn.Linear(self.node_feat_dim + pe_dim, latent_dim[0])
         elif scenario in [5, 6, 7, 8]:
             self.lin_node_feat = nn.Linear(self.node_feat_dim, latent_dim[0])
@@ -83,7 +83,7 @@ class IGMC(GNN):
             elif isinstance(m, nn.BatchNorm1d):
                 nn.init.constant_(m.weight, 1)
                 nn.init.constant_(m.bias, 0)
-            elif isinstance(m, GatedGCNLayer):
+            elif isinstance(m, (GatedGCNLayer, GatedGCNLSPELayer)):
                 m.initialize_weights()
 
     def forward(self, data):
@@ -111,7 +111,7 @@ class IGMC(GNN):
         )
 
         ## Convert node feat, pe to suitable dim before passing thu GNN layers
-        if self.scenario in [1,2,3,4]:
+        if self.scenario in [1, 2, 3, 4]:
             x = torch.cat((node_subgraph_feat, pe), -1)
             x = self.lin_node_feat(x)
         elif self.scenario in [5, 6, 7, 8]:
@@ -119,7 +119,6 @@ class IGMC(GNN):
             pe = self.lin_pe(pe)
         else:
             raise NotImplementedError()
-        
 
         ## Apply graph size norm
         if self.scenario in [3, 4]:
@@ -128,7 +127,7 @@ class IGMC(GNN):
         ## Pass node feat thru GNN layers
         concat_states = []
         for conv in self.convs:
-            if self.scenario in [1,2,3,4]:
+            if self.scenario in [1, 2, 3, 4]:
                 x, edge_embd = conv(x, edge_embd, edge_index)
                 state = x
             elif self.scenario in [5, 6, 7, 8]:
@@ -139,11 +138,6 @@ class IGMC(GNN):
 
             concat_states.append(state)
         concat_states = torch.cat(concat_states, 1)
-
-        ## NOTE: Use this
-        ## Apply graph size norm
-        # if self.scenario in [3, 4]:
-        #     x = self.graphsizenorm(x, batch)
 
         users = data.x[:, 1] == 1
         items = data.x[:, 2] == 1

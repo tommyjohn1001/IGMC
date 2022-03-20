@@ -1,3 +1,8 @@
+## Mar 20 | 21:09
+
+- Discard **GatedGCN** and variants, back to **R-GCN**
+- Implement **R-GCN-LSPE** and **Fast-R-GCN-LSPE**
+
 ## Mar 18 | 23:05
 
 - Tailor different training scripts for each dataset

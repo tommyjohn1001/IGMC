@@ -1,3 +1,8 @@
+## Mar 22 | 16:05
+
+- Implement **Old-R-GCN-LSPE** that inherits **R-GCN** implementation from pyg 1.4.2
+- Implement **EdgeAugment** (not used yet)
+
 ## Mar 20 | 21:09
 
 - Discard **GatedGCN** and variants, back to **R-GCN**

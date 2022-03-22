@@ -4,6 +4,7 @@ import argparse
 import math
 import multiprocessing as mp
 import os
+import itertools
 import pdb
 import random
 import sys
@@ -117,7 +118,6 @@ class MyDataset(InMemoryDataset):
                                     self.u_features, self.v_features, 
                                     self.class_values, self.parallel)
 
-        # torch.save(data_list, "subgraphs_.pkl")
 
         data, slices = self.collate(data_list)
         torch.save((data, slices), self.processed_paths[0])
@@ -322,7 +322,25 @@ def init_positional_encoding(g, pos_enc_dim):
     ## Concate PE to node feat
     g.x = torch.cat((g.x, PE), -1)
 
-    
+def get_non_edges(example: Data, k: int = 50) -> list:
+    user_node_idx = torch.where((example.x[:, 1] == 1) | (example.x[:, 3] == 1))
+    item_node_idx = torch.where((example.x[:, 2] == 1) | (example.x[:, 4] == 1))
+    users = set(user_node_idx[0].tolist())
+    items = set(item_node_idx[0].tolist())
+
+    edge_index = example.edge_index.permute((1, 0))
+    edges = set(tuple(x) for x in edge_index.tolist())
+    possible_edges = set(itertools.product(users, items))
+
+    non_edges = possible_edges.difference(edges)
+    if non_edges == []:
+        return []
+
+    ## Take k edges only
+    k = min(k, len(non_edges))
+    non_edges = random.sample(non_edges, k=k)
+
+    return non_edges
 
 def construct_pyg_graph(u, v, r, node_labels, max_node_label, y, node_features, node_index, pos_enc_dim):
     # TODO: Append node index of each node in u, v, node index is fetched from u_nodes, v_nodes to append to node_feat
@@ -349,6 +367,11 @@ def construct_pyg_graph(u, v, r, node_labels, max_node_label, y, node_features, 
 
     ## Add PE info
     init_positional_encoding(data, pos_enc_dim=pos_enc_dim)
+
+    ## Add non-edges
+    non_edges = get_non_edges(data)
+    non_edges = torch.tensor(non_edges, dtype=torch.long).permute((1,0))
+    data.non_edge_index = non_edges
 
     return data
 

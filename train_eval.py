@@ -116,7 +116,7 @@ def train_multiple_epochs(
                 param_group["lr"] = lr_decay_factor * param_group["lr"]
 
         if logger is not None:
-            logger(eval_info, model, optimizer)
+            logger(eval_info, model, optimizer, args.testing)
 
     if torch.cuda.is_available():
         torch.cuda.synchronize()
@@ -179,7 +179,7 @@ def train(
     for ith, data in enumerate(pbar):
         optimizer.zero_grad()
         data = data.to(device)
-        out = model(data)
+        out = model(data, epoch)
         if regression:
             loss = F.mse_loss(out, data.y.view(-1))
         else:
@@ -212,7 +212,7 @@ def eval_loss(model, loader, device, regression=False, show_progress=False):
     for data in pbar:
         data = data.to(device)
         with torch.no_grad():
-            out = model(data)
+            out = model(data, is_training=False)
         if regression:
             loss += F.mse_loss(out, data.y.view(-1), reduction="sum").item()
         else:
@@ -246,7 +246,7 @@ def eval_loss_ensemble(model, checkpoints, loader, device, regression=False, sho
             if i == 0:
                 ys.append(data.y.view(-1))
             with torch.no_grad():
-                out = model(data)
+                out = model(data, is_training=False)
                 outs.append(out)
         if i == 0:
             ys = torch.cat(ys, 0)

@@ -5,10 +5,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch_geometric.nn as pyg_nn
-from torch import Tensor
+from torch import Tensor, nn
 from torch.nn import Conv1d, Linear, Parameter
-from torch_geometric.nn import GCNConv, RGCNConv, global_add_pool, global_sort_pool
-from torch_geometric.nn.conv import MessagePassing
+from torch_geometric.nn import GCNConv, global_add_pool, global_sort_pool
+from torch_geometric.nn.conv import MessagePassing, RGCNConv
 from torch_geometric.utils import dropout_adj
 from torch_scatter import scatter
 from torch_sparse import SparseTensor, masked_select_nnz, matmul
@@ -317,6 +317,9 @@ class GatedGCNLSPELayer(pyg_nn.conv.MessagePassing):
         return x, e_out
 
 
+## Implementation using R-GCN of newest pyg ======================================
+
+
 class RGatedGCNLayer(pyg_nn.conv.MessagePassing):
     """Implementation for Relational Gated Graph ConvNets.
     Currently, only Basis-decomposition regularization is usable
@@ -530,7 +533,7 @@ class FastRGatedGCNLayer(RGatedGCNLayer):
         return out
 
 
-class RGCNConv(MessagePassing):
+class NewRGCNConv(MessagePassing):
     r"""The relational graph convolutional operator from the `"Modeling
     Relational Data with Graph Convolutional Networks"
     <https://arxiv.org/abs/1703.06103>`_ paper
@@ -749,7 +752,7 @@ class RGCNConv(MessagePassing):
         )
 
 
-class FastRGCNConv(RGCNConv):
+class NewFastRGCNConv(NewRGCNConv):
     r"""See :class:`RGCNConv`."""
 
     def forward(
@@ -829,7 +832,7 @@ class FastRGCNConv(RGCNConv):
         return scatter(inputs, index, dim=self.node_dim, dim_size=dim_size)
 
 
-class RGCNConvLSPE(RGCNConv):
+class NewRGCNConvLSPE(NewRGCNConv):
     def __init__(
         self,
         in_channels: Union[int, Tuple[int, int]],
@@ -895,7 +898,7 @@ class RGCNConvLSPE(RGCNConv):
         return x, pe
 
 
-class FastRGCNConvLSPE(FastRGCNConv):
+class NewFastRGCNConvLSPE(NewFastRGCNConv):
     def __init__(
         self,
         in_channels: Union[int, Tuple[int, int]],
@@ -945,6 +948,70 @@ class FastRGCNConvLSPE(FastRGCNConv):
 
         if self.residual:
             x, pe = self.lin_x(x), self.lin_pe(pe)
+            x_in, pe_in = x, pe
+
+        x = self.lin_x_pe_cat(torch.cat((x, pe), dim=-1))
+        updated_x = super().forward(x, edge_index, edge_type)
+        updated_x = F.relu(self.bn_node_x(x))
+        updated_pe = super().forward(pe, edge_index, edge_type)
+        updated_pe = torch.tanh(updated_pe)
+
+        x, pe = updated_x, updated_pe
+
+        if self.residual:
+            x, pe = x_in + x, pe_in + pe
+
+        return x, pe
+
+
+## Implementation using R-GCN of pyg 1.4.2 ======================================
+
+
+class OldRGCNConvLSPE(RGCNConv):
+    """R-GCN-LSPE based on implement of R-GCN of pyg ver 1.4.2"""
+
+    def __init__(
+        self,
+        in_channels: Union[int, Tuple[int, int]],
+        out_channels: int,
+        num_relations: int,
+        num_bases: Optional[int] = None,
+        root_weight: bool = True,
+        bias: bool = True,
+        is_residual: bool = False,
+        **kwargs,
+    ):
+
+        self.residual = is_residual
+
+        super().__init__(
+            out_channels,
+            out_channels,
+            num_relations,
+            num_bases,
+            root_weight,
+            bias,
+            **kwargs,
+        )
+
+        self.lin_x = nn.Linear(in_channels, out_channels)
+        self.lin_pe = nn.Linear(in_channels, out_channels)
+        self.lin_x_pe_cat = nn.Linear(out_channels * 2, out_channels)
+        self.bn_node_x = nn.BatchNorm1d(out_channels)
+
+        self.reset_parameters()
+
+    def forward(
+        self,
+        x: Tensor,
+        pe: Tensor,
+        edge_index: Adj,
+        edge_type: OptTensor = None,
+    ):
+
+        x, pe = self.lin_x(x), self.lin_pe(pe)
+
+        if self.residual:
             x_in, pe_in = x, pe
 
         x = self.lin_x_pe_cat(torch.cat((x, pe), dim=-1))

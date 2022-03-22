@@ -26,14 +26,15 @@ class IGMC(GNN):
         multiply_by=1,
         pe_dim=20,
         n_nodes=3000,
+        class_values=None,
         scenario=1,
     ):
         # gconv = GatedGCNLayer GatedGCNLSPELayer RGatedGCNLayer
-        if scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
-            gconv = FastRGCNConv #FastRGCNConv
-        elif scenario in [9, 10, 11, 12]:
+        if scenario in [1, 2, 3, 4, 5, 6]:
+            gconv = RGCNConv  # FastRGCNConv
+        elif scenario in [7, 8, 9, 10]:
             # gconv = RGCNConvLSPE
-            gconv = RGCNConvLSPE
+            gconv = OldRGCNConvLSPE
         else:
             raise NotImplementedError()
 
@@ -53,26 +54,26 @@ class IGMC(GNN):
 
         self.multiply_by = multiply_by
         self.scenario = scenario
+        self.class_values = class_values
 
         ## Declare modules to convert edge index to hidden edge vector
         self.edge_embd = nn.Linear(1, latent_dim[0])
 
         ## Declare modules to convert node feat, pe to hidden vectors
         self.node_feat_dim = dataset.num_features - pe_dim - 1
-        if scenario in [2, 4, 6]:
-            self.lin_node_feat = nn.Linear(self.node_feat_dim + pe_dim, latent_dim[0])
-        elif scenario in [1, 3, 5, 7, 9, 10, 11, 12]:
-            self.lin_node_feat = nn.Linear(self.node_feat_dim, latent_dim[0])
-            self.lin_pe = nn.Linear(pe_dim, latent_dim[0])
-            self.lin_state = nn.Linear(latent_dim[0] * 2, latent_dim[0])
-        else:
-            raise NotImplementedError()
+        if scenario in [3, 4, 5, 6]:
+            self.lin_feat_pe = nn.Linear(self.node_feat_dim + pe_dim, self.node_feat_dim)
+        if scenario in [7, 8, 9, 10]:
+            self.lin_pe = nn.Linear(pe_dim, self.node_feat_dim)
 
         ## Declare GNN layers
         self.convs = torch.nn.ModuleList()
-        self.convs.append(gconv(latent_dim[0], latent_dim[0], num_relations, num_bases))
+        kwargs = {"num_relations": num_relations, "num_bases": num_bases}
+        if scenario in [7, 8, 9, 10]:
+            kwargs["is_residual"] = True
+        self.convs.append(gconv(self.node_feat_dim, latent_dim[0], **kwargs))
         for i in range(0, len(latent_dim) - 1):
-            self.convs.append(gconv(latent_dim[i], latent_dim[i + 1], num_relations, num_bases))
+            self.convs.append(gconv(latent_dim[i], latent_dim[i + 1], **kwargs))
 
         self.lin1 = Linear(2 * sum(latent_dim), 128)
         self.side_features = side_features
@@ -95,9 +96,24 @@ class IGMC(GNN):
             elif isinstance(m, (GatedGCNLayer, GatedGCNLSPELayer)):
                 m.initialize_weights()
 
-    def forward(self, data):
+    def conv_score2class(self, score, device=None):
+        if not isinstance(self.class_values, torch.Tensor):
+            self.class_values = torch.tensor(self.class_values, device=device)
 
-        x, edge_index, edge_type, batch = data.x, data.edge_index, data.edge_type, data.batch
+        classes_ = self.class_values.unsqueeze(0).repeat(score.shape[0], 1)
+        indices = torch.abs((score - classes_)).argmin(-1)
+
+        return indices
+
+    def forward(self, data, epoch=-1, is_training=True):
+
+        x, edge_index, edge_type, batch, non_edges = (
+            data.x,
+            data.edge_index,
+            data.edge_type,
+            data.batch,
+            data.non_edge_index,
+        )
 
         if self.adj_dropout > 0:
             edge_index, edge_type = dropout_adj(
@@ -117,29 +133,69 @@ class IGMC(GNN):
         )
 
         ## Convert node feat, pe to suitable dim before passing thu GNN layers
-        if self.scenario in [2, 4, 6, 8]:
+        if self.scenario in [1, 2]:
+            x = node_subgraph_feat
+        if self.scenario in [3, 4, 5, 6]:
             x = torch.cat((node_subgraph_feat, pe), -1)
             x = self.lin_node_feat(x)
-        else:
-            x = self.lin_node_feat(node_subgraph_feat)
+        if self.scenario in [7, 8, 9, 10]:
             pe = self.lin_pe(pe)
+            x = node_subgraph_feat
 
         ## Apply graph size norm
-        if self.scenario in [3, 4, 7, 8, 10, 12]:
+        if self.scenario in [2, 5, 6, 9, 10]:
             x = self.graphsizenorm(x, batch)
 
         ## Pass node feat thru GNN layers
         concat_states = []
+        x_before = x
+
         for conv in self.convs:
-            if self.scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
-                x = conv(x, edge_index, edge_type)
-            elif self.scenario in [9, 10, 11, 12]:
+            if self.scenario in [1, 2, 3, 4, 5, 6]:
+                x = torch.tanh(conv(x, edge_index, edge_type))
+            elif self.scenario in [7, 8, 9, 10]:
                 x, pe = conv(x, pe, edge_index, edge_type)
             else:
                 raise NotImplementedError()
 
             concat_states.append(x)
         concat_states = torch.cat(concat_states, 1)
+
+        ## NOTE: Enable the following if using EdgeAugment
+        # if epoch > 25:
+        #     with torch.no_grad():
+        #         users, items = non_edges[0], non_edges[1]
+        #         x_ = torch.cat([concat_states[users], concat_states[items]], 1)
+        #         x_ = F.relu(self.lin1(x_))
+        #         x_ = F.dropout(x_, p=0.5, training=self.training)
+        #         score_non_edges = self.lin2(x_)
+
+        #         ## Convert predicted score to class
+        #         trg_class = self.conv_score2class(score_non_edges, x.device).to(
+        #             dtype=edge_type.dtype
+        #         )
+
+        #         edge_index = torch.cat((edge_index, non_edges), dim=-1)
+        #         edge_type = torch.cat((edge_type, trg_class), dim=-1)
+
+        #     ## Pass node feat thru GNN layers
+        #     x = x_before
+        #     concat_states = []
+        #     for conv in self.convs:
+        #         if self.scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
+        #             # torch.save(x, "pkls/x_after.pkl")
+        #             # torch.save(edge_index, "pkls/edge_index_after.pkl")
+        #             # torch.save(edge_type, "pkls/edge_type_after.pkl")
+        #             # exit()
+        #             x = conv(x, edge_index, edge_type)
+
+        #         elif self.scenario in [9, 10, 11, 12]:
+        #             x, pe = conv(x, pe, edge_index, edge_type)
+        #         else:
+        #             raise NotImplementedError()
+
+        #         concat_states.append(x)
+        #     concat_states = torch.cat(concat_states, 1)
 
         users = data.x[:, 1] == 1
         items = data.x[:, 2] == 1

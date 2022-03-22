@@ -73,29 +73,30 @@ class KeepBest:
 
 best = KeepBest(5)
 
-def logger(info, model, optimizer):
+def logger(info, model, optimizer, testing=True):
     epoch, train_loss, test_rmse = info['epoch'], info['train_loss'], info['test_rmse']
     with open(os.path.join(args.res_dir, 'log.txt'), 'a') as f:
         f.write('Epoch {}, train loss {:.4f}, test rmse {:.6f}\n'.format(
             epoch, train_loss, test_rmse))
-    # if type(epoch) == int and epoch % args.save_interval == 0:
-    #     print('Saving model states...')
-    #     model_name = os.path.join(args.res_dir, 'model_checkpoint{}.pth'.format(epoch))
-    #     optimizer_name = os.path.join(
-    #         args.res_dir, 'optimizer_checkpoint{}.pth'.format(epoch)
-    #     )
-    #     if model is not None:
-    #         torch.save(model.state_dict(), model_name)
-    #     if optimizer is not None:
-    #         torch.save(optimizer.state_dict(), optimizer_name)
-
-    if int(epoch) > 1:
-        print('Saving model states...')
-        model_name = os.path.join(args.res_dir, f"model_checkpoint_{epoch}_{info['test_rmse']:.3f}.pth")
-        optimizer_name = os.path.join(
-            args.res_dir, 'optimizer_checkpoint{}.pth'.format(epoch)
-        )
-        best.add(info['test_rmse'], model, model_name)
+    if testing:
+        if type(epoch) == int and epoch % args.save_interval == 0:
+            print('Saving model states...')
+            model_name = os.path.join(args.res_dir, 'model_checkpoint{}.pth'.format(epoch))
+            optimizer_name = os.path.join(
+                args.res_dir, 'optimizer_checkpoint{}.pth'.format(epoch)
+            )
+            if model is not None:
+                torch.save(model.state_dict(), model_name)
+            if optimizer is not None:
+                torch.save(optimizer.state_dict(), optimizer_name)
+    else:
+        if int(epoch) > 1:
+            print('Saving model states...')
+            model_name = os.path.join(args.res_dir, f"model_checkpoint_{epoch}_{info['test_rmse']:.3f}.pth")
+            optimizer_name = os.path.join(
+                args.res_dir, 'optimizer_checkpoint{}.pth'.format(epoch)
+            )
+            best.add(info['test_rmse'], model, model_name)
     
 
 
@@ -457,6 +458,7 @@ else:
         multiply_by=multiply_by,
         pe_dim=args.pe_dim,
         n_nodes=n_nodes,
+        class_values=class_values,
         scenario=args.scenario
     )
     total_params = sum(p.numel() for param in model.parameters() for p in param)

@@ -36,8 +36,7 @@ if __name__ == "__main__":
 
     cuda_device = args.scenario % 2
     for ith in range(TIMES):
-        # for dataset in ["yahoo_music", "douban", "flixster"]:
-        for dataset in ["flixster"]:
+        for dataset in ["yahoo_music", "douban", "flixster"]:
             if args.scenario in [1, 2]:
                 pe_dim = 1
             if args.scenario in [3, 5, 7, 9]:

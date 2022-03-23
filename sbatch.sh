@@ -32,8 +32,5 @@ srun --container-image=/lustre/scratch/client/vinai/users/hoanglh88/utils/dc-min
      conda activate igmc/
 
      cd /hoanglh88/IGMC
-     CUDA_VISIBLE_DEVICES=0 python bot_samek.py --scenario  9 & CUDA_VISIBLE_DEVICES=1 python bot_samek.py --scenario 11
-     CUDA_VISIBLE_DEVICES=0 python bot_samek.py --scenario 13 & CUDA_VISIBLE_DEVICES=1 python bot_samek.py --scenario 15
-     CUDA_VISIBLE_DEVICES=0 python bot_diffk.py --scenario 10 & CUDA_VISIBLE_DEVICES=1 python bot_diffk.py --scenario 12
-     CUDA_VISIBLE_DEVICES=0 python bot_diffk.py --scenario 13 & CUDA_VISIBLE_DEVICES=1 python bot_diffk.py --scenario 16
+     python bot.python
      "

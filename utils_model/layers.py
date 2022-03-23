@@ -1,11 +1,17 @@
 import math
+from typing import Any, Optional, Tuple, Union
 
 from all_packages import *
+from torch import Tensor, nn
 from torch.nn import Conv1d, Linear
 from torch_geometric.nn import GCNConv, RGCNConv, global_add_pool, global_sort_pool
 from torch_geometric.utils import degree, dropout_adj
 from torch_scatter import scatter
+from torch_sparse import SparseTensor
 from util_functions import *
+
+Adj = Union[Tensor, SparseTensor]
+OptTensor = Optional[Tensor]
 
 
 class GatedGCNLayer(pyg_nn.conv.MessagePassing):
@@ -243,26 +249,90 @@ class GatedGCNLSPELayer(pyg_nn.conv.MessagePassing):
         return x, e_out
 
 
+class OldRGCNConvLSPELayer(RGCNConv):
+    """R-GCN-LSPE based on implement of R-GCN of pyg ver 1.4.2"""
+
+    def __init__(
+        self,
+        in_channels: Union[int, Tuple[int, int]],
+        out_channels: int,
+        num_relations: int,
+        num_bases: Optional[int] = None,
+        root_weight: bool = True,
+        bias: bool = True,
+        is_residual: bool = False,
+        **kwargs,
+    ):
+
+        self.residual = is_residual
+
+        super().__init__(
+            out_channels,
+            out_channels,
+            num_relations,
+            num_bases,
+            root_weight,
+            bias,
+            **kwargs,
+        )
+
+        self.lin_x = nn.Linear(in_channels, out_channels)
+        self.lin_pe = nn.Linear(in_channels, out_channels)
+        self.lin_x_pe_cat = nn.Linear(out_channels * 2, out_channels)
+        self.bn_node_x = nn.BatchNorm1d(out_channels)
+
+        self.reset_parameters()
+
+    def forward(
+        self,
+        x: Tensor,
+        pe: Tensor,
+        edge_index: Adj,
+        edge_type: OptTensor = None,
+    ):
+
+        x, pe = self.lin_x(x), self.lin_pe(pe)
+
+        if self.residual:
+            x_in, pe_in = x, pe
+
+        x = self.lin_x_pe_cat(torch.cat((x, pe), dim=-1))
+        updated_x = super().forward(x, edge_index, edge_type)
+        updated_x = F.relu(self.bn_node_x(x))
+        updated_pe = super().forward(pe, edge_index, edge_type)
+        updated_pe = torch.tanh(updated_pe)
+
+        x, pe = updated_x, updated_pe
+
+        if self.residual:
+            x, pe = x_in + x, pe_in + pe
+
+        return x, pe
+
+
 class GNN(torch.nn.Module):
     # a base GNN class, GCN message passing + sum_pooling
     def __init__(
         self,
         dataset,
-        gconv=GatedGCNLayer,
+        gconv=RGCNConv,
         latent_dim=[32, 32, 32, 1],
         regression=False,
         adj_dropout=0.2,
         force_undirected=False,
         hid_dim=128,
+        num_relations=5,
+        num_bases=2,
     ):
         super(GNN, self).__init__()
         self.regression = regression
         self.adj_dropout = adj_dropout
         self.force_undirected = force_undirected
         self.convs = torch.nn.ModuleList()
-        self.convs.append(gconv(dataset.num_features, latent_dim[0]))
+        self.convs.append(gconv(dataset.num_features, latent_dim[0], num_relations, num_bases))
         for i in range(0, len(latent_dim) - 1):
-            self.convs.append(gconv(latent_dim[i], latent_dim[i + 1]))
+            self.convs.append(gconv(latent_dim[i], latent_dim[i + 1], num_relations, num_bases))
+
         self.lin1 = Linear(sum(latent_dim), hid_dim)
         if self.regression:
             self.lin2 = Linear(hid_dim, 1)

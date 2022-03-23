@@ -1,3 +1,8 @@
+## Mar 23 | 16:09
+
+- Discard **GatedGCN** family, use **OldRGCNConvLSPELayer** instead
+- Fix method of calculating ARR loss
+
 ## Mar 13 | 15:37
 
 - Add `GatedGCNLSPELayer` and modify `GatedGCNLayer`

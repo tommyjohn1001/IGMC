@@ -1,3 +1,10 @@
+## Mar 29 | 14:35
+
+- Add **TransformerEncoder** layer to before GNN
+- Replace **Adam** by **AdamW**
+- Set SEED and n\*epoch for **yahoo music** are 1 and 20
+- Increase common k for RWPE from 20 to 40
+
 ## Mar 22 | 16:05
 
 - Implement **Old-R-GCN-LSPE** that inherits **R-GCN** implementation from pyg 1.4.2

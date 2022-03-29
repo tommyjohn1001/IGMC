@@ -39,13 +39,10 @@ def warn_with_traceback(message, category, filename, lineno, file=None, line=Non
 
 warnings.showwarning = warn_with_traceback
 
-SEED = random.randint(0, 1000)
 
-torch.manual_seed(SEED)
-torch.cuda.manual_seed(SEED)
-np.random.seed(SEED)
 
-logu.info(f"SEED: {SEED}")
+
+
 
 class KeepBest:
     def __init__(self, k) -> None:
@@ -198,7 +195,11 @@ parser.add_argument('--ratio', type=float, default=1.0,
     Set seeds, prepare for transfer learning (if --transfer)
 '''
 args = parser.parse_args()
+
+logu.info(f"SEED: {args.seed}")
+
 torch.manual_seed(args.seed)
+
 if torch.cuda.is_available():
     torch.cuda.manual_seed(args.seed)
 print(args)

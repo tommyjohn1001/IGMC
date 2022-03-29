@@ -75,6 +75,10 @@ class IGMC(GNN):
         for i in range(0, len(latent_dim) - 1):
             self.convs.append(gconv(latent_dim[i], latent_dim[i + 1], **kwargs))
 
+        self.trans_encoder = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(d_model=4, nhead=2), 4
+        )
+
         self.lin1 = Linear(2 * sum(latent_dim), 128)
         self.side_features = side_features
         if side_features:
@@ -105,6 +109,17 @@ class IGMC(GNN):
 
         return indices
 
+    def create_trans_mask(self, batch, dtype, device, batch_size=50):
+        masks = []
+        for i in range(batch_size):
+            n_nodes_batch = torch.sum(batch == i)
+            mask_batch = torch.ones((n_nodes_batch, n_nodes_batch), dtype=dtype, device=device)
+            masks.append(mask_batch)
+
+        mask = torch.block_diag(*masks)
+
+        return mask
+
     def forward(self, data, epoch=-1, is_training=True):
 
         x, edge_index, edge_type, batch, non_edges = (
@@ -132,12 +147,15 @@ class IGMC(GNN):
             x[:, self.node_feat_dim + 1 :],
         )
 
+        mask = self.create_trans_mask(batch, x.dtype, x.device)
+        node_subgraph_feat = self.trans_encoder(node_subgraph_feat.unsqueeze(1), mask).squeeze(1)
+
         ## Convert node feat, pe to suitable dim before passing thu GNN layers
         if self.scenario in [1, 2]:
             x = node_subgraph_feat
         if self.scenario in [3, 4, 5, 6]:
             x = torch.cat((node_subgraph_feat, pe), -1)
-            x = self.lin_node_feat(x)
+            x = self.lin_feat_pe(x)
         if self.scenario in [7, 8, 9, 10]:
             pe = self.lin_pe(pe)
             x = node_subgraph_feat

@@ -9,7 +9,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 import wandb
-from torch.optim import Adam
+from torch.optim import Adam, AdamW
 
 # from torch_geometric.data import DataLoader ## Only use if using newer pyg version
 from torch_geometric.data import DataLoader
@@ -56,7 +56,7 @@ def train_multiple_epochs(
     test_loader = DataLoader(test_dataset, batch_size, shuffle=False, num_workers=num_workers)
 
     model.to(device).reset_parameters()
-    optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+    optimizer = AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
     start_epoch = 1
     if continue_from is not None:
         model.load_state_dict(

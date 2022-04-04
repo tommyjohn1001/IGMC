@@ -1,3 +1,7 @@
+## Apr 4 | 10:15
+
+- Add scenarios using _GatedGCN-LSPE_
+
 ## Mar 29 | 14:35
 
 - Add **TransformerEncoder** layer to before GNN

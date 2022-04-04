@@ -48,6 +48,8 @@ def train_multiple_epochs(
         num_workers = mp.cpu_count()
     else:
         num_workers = 2
+
+
     train_loader = DataLoader(train_dataset, batch_size, shuffle=True, num_workers=num_workers)
     if test_dataset.__class__.__name__ == "MyDynamicDataset":
         num_workers = mp.cpu_count()
@@ -72,11 +74,7 @@ def train_multiple_epochs(
         torch.cuda.synchronize()
 
     batch_pbar = len(train_dataset) >= 100000
-    t_start = time.perf_counter()
-    if not batch_pbar:
-        pbar = tqdm(range(start_epoch, epochs + start_epoch))
-    else:
-        pbar = range(start_epoch, epochs + start_epoch)
+    pbar = range(start_epoch, epochs + start_epoch)
     for epoch in pbar:
         train_loss = train(
             model,
@@ -85,7 +83,7 @@ def train_multiple_epochs(
             device,
             regression=True,
             ARR=ARR,
-            show_progress=batch_pbar,
+            show_progress=True,
             epoch=epoch,
             args=args,
         )
@@ -121,10 +119,7 @@ def train_multiple_epochs(
     if torch.cuda.is_available():
         torch.cuda.synchronize()
 
-    t_end = time.perf_counter()
-    duration = t_end - t_start
-
-    print("Final Test RMSE: {:.6f}, Duration: {:.6f}".format(rmses[-1], duration))
+    print(f"Final Test RMSE: {rmses[-1]:.6f}")
 
     return rmses[-1]
 
@@ -133,14 +128,13 @@ def test_once(test_dataset, model, batch_size, logger=None, ensemble=False, chec
 
     test_loader = DataLoader(test_dataset, batch_size, shuffle=False)
     model.to(device)
-    t_start = time.perf_counter()
+    
     if ensemble and checkpoints:
         rmse = eval_rmse_ensemble(model, checkpoints, test_loader, device, show_progress=True)
     else:
         rmse = eval_rmse(model, test_loader, device, show_progress=True)
-    t_end = time.perf_counter()
-    duration = t_end - t_start
-    print("Test Once RMSE: {:.6f}, Duration: {:.6f}".format(rmse, duration))
+
+    print(f"Test Once RMSE: {rmse:.6f}")
     epoch_info = "test_once" if not ensemble else "ensemble"
     eval_info = {
         "epoch": epoch_info,

@@ -404,6 +404,8 @@ def load_official_trainvaltest_split(dataset, testing=False, rating_map=None, po
     u_nodes = u_nodes_ratings
     v_nodes = v_nodes_ratings
 
+    n_nodes =  max(u_nodes) + 1 + max(v_nodes) + 1
+
     neutral_rating = -1  # int(np.ceil(np.float(num_classes)/2.)) - 1
 
     # assumes that ratings_train contains at least one example of every rating type
@@ -597,4 +599,4 @@ def load_official_trainvaltest_split(dataset, testing=False, rating_map=None, po
     print("Item features shape: "+str(v_features.shape))
 
     return u_features, v_features, rating_mx_train, train_labels, u_train_idx, v_train_idx, \
-        val_labels, u_val_idx, v_val_idx, test_labels, u_test_idx, v_test_idx, class_values
+        val_labels, u_val_idx, v_val_idx, test_labels, u_test_idx, v_test_idx, class_values, n_nodes

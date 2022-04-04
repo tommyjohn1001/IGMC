@@ -4,24 +4,23 @@ import math
 import os.path
 import pdb
 import random
+import re
 import sys
 import time
 import traceback
 import warnings
 from datetime import datetime, timedelta
-from shutil import copy, copytree, rmtree
 from glob import glob
+from shutil import copy, copytree, rmtree
+
 import dotenv
 import numpy as np
 import scipy.io as sio
 import scipy.sparse as ssp
-from loguru import logger as logu
 import torch
-import re
-import numpy as np
-
-
 import wandb
+from loguru import logger as logu
+
 from data_utils import *
 from models import *
 from preprocessing import *
@@ -295,7 +294,7 @@ elif args.data_name == 'ml_100k':
     (
         u_features, v_features, adj_train, train_labels, train_u_indices, train_v_indices,
         val_labels, val_u_indices, val_v_indices, test_labels, test_u_indices, 
-        test_v_indices, class_values
+        test_v_indices, class_values, n_nodes
     ) = load_official_trainvaltest_split(
         args.data_name, args.testing, rating_map, post_rating_map, args.ratio
     )
@@ -497,8 +496,8 @@ if not args.no_train:
     )
 
 
-
-checkpoints = glob(f"{args.res_dir}/model*.pth")
+## Only take 4 last checkpoints
+checkpoints = sorted(glob(f"{args.res_dir}/model*.pth"))[-4:]
 
 if not args.ensemble:
     ## only choose best ckpt

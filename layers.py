@@ -234,10 +234,11 @@ class GatedGCNLSPELayer(pyg_nn.conv.MessagePassing):
             e_in = e
             pe_in = pe
 
-        Ax = self.A(torch.cat((x, pe), dim=-1))
-        Bx = self.B(torch.cat((x, pe), dim=-1))
-        Dx = self.D(torch.cat((x, pe), dim=-1))
-        Ex = self.E(torch.cat((x, pe), dim=-1))
+        x_pe = torch.cat((x, pe), dim=-1)
+        Ax = self.A(x_pe)
+        Bx = self.B(x_pe)
+        Dx = self.D(x_pe)
+        Ex = self.E(x_pe)
         Ce = self.C(e)
         Ape = self.Ap(pe)
         Bpe = self.Bp(pe)
@@ -434,12 +435,7 @@ class RGatedGCNLayer(pyg_nn.conv.MessagePassing):
         for i in range(self.num_relations):
             masked_edge_indx = masked_edge_index(edge_index, edge_type == i)
 
-            # # fmt: off
-            # import ipdb; ipdb.set_trace()
-            # # fmt: on
-
-            # h = self.propagate(masked_edge_indx, Bx=Bx, Dx=Dx, Ex=Ex, Ax=Ax)
-            h = self.propagate(masked_edge_indx, Bx=Ax, Dx=Ax, Ex=Ax, Ax=Ax)
+            h = self.propagate(masked_edge_indx, Bx=Bx, Dx=Dx, Ex=Ex, Ax=Ax)
             out = out + (h @ weight[i])
 
         ##########################################

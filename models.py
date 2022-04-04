@@ -29,12 +29,12 @@ class IGMC(GNN):
         class_values=None,
         scenario=1,
     ):
-        # gconv = GatedGCNLayer GatedGCNLSPELayer RGatedGCNLayer
-        if scenario in [1, 2, 3, 4, 5, 6]:
-            gconv = RGCNConv  # FastRGCNConv
-        elif scenario in [7, 8, 9, 10]:
-            # gconv = RGCNConvLSPE
+        # gconv = GatedGCNLayer GatedGCNLSPELayer RGatedGCNLayer RGCNConv
+        if scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
+            # gconv = RGCNConvLSPE GatedGCNLSPELayer
             gconv = OldRGCNConvLSPE
+        elif scenario in [9, 10, 11, 12, 13, 14, 15, 16]:
+            gconv = GatedGCNLSPELayer
         else:
             raise NotImplementedError()
 
@@ -56,30 +56,38 @@ class IGMC(GNN):
         self.scenario = scenario
         self.class_values = class_values
 
-        ## Declare modules to convert edge index to hidden edge vector
-        self.edge_embd = nn.Linear(1, latent_dim[0])
-
         ## Declare modules to convert node feat, pe to hidden vectors
         self.node_feat_dim = dataset.num_features - pe_dim - 1
-        if scenario in [3, 4, 5, 6]:
-            self.lin_feat_pe = nn.Linear(self.node_feat_dim + pe_dim, self.node_feat_dim)
-        if scenario in [7, 8, 9, 10]:
+        if self.scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
             self.lin_pe = nn.Linear(pe_dim, self.node_feat_dim)
+        elif self.scenario in [9, 10, 11, 12, 13, 14, 15, 16]:
+            self.lin_pe = nn.Linear(pe_dim, latent_dim[0])
+            self.edge_embd = nn.Linear(1, latent_dim[0])
+            self.lin_x = nn.Linear(self.node_feat_dim, latent_dim[0])
 
         ## Declare GNN layers
         self.convs = torch.nn.ModuleList()
-        kwargs = {"num_relations": num_relations, "num_bases": num_bases}
-        if scenario in [7, 8, 9, 10]:
-            kwargs["is_residual"] = True
-        self.convs.append(gconv(self.node_feat_dim, latent_dim[0], **kwargs))
-        for i in range(0, len(latent_dim) - 1):
-            self.convs.append(gconv(latent_dim[i], latent_dim[i + 1], **kwargs))
+        if scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
+            kwargs = {"num_relations": num_relations, "num_bases": num_bases, "is_residual": True}
+            self.convs.append(gconv(self.node_feat_dim, latent_dim[0], **kwargs))
+            for i in range(0, len(latent_dim) - 1):
+                self.convs.append(gconv(latent_dim[i], latent_dim[i + 1], **kwargs))
+        elif scenario in [9, 10, 11, 12, 13, 14, 15, 16]:
+            self.convs.append(gconv(latent_dim[0], latent_dim[0]))
+            for i in range(0, len(latent_dim) - 1):
+                self.convs.append(gconv(latent_dim[i], latent_dim[i + 1]))
 
         self.trans_encoder = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(d_model=4, nhead=2), 4
         )
 
-        self.lin1 = Linear(2 * sum(latent_dim), 128)
+        if scenario in [1, 2, 3, 4, 9, 10, 11, 12]:
+            self.lin1 = Linear(2 * sum(latent_dim), 128)
+        elif scenario in [5, 6, 7, 8, 13, 14, 15, 16]:
+            self.lin1 = Linear(4 * sum(latent_dim), 128)
+        else:
+            raise NotImplementedError()
+
         self.side_features = side_features
         if side_features:
             self.lin1 = Linear(2 * sum(latent_dim) + n_side_features, 128)
@@ -151,32 +159,36 @@ class IGMC(GNN):
         node_subgraph_feat = self.trans_encoder(node_subgraph_feat.unsqueeze(1), mask).squeeze(1)
 
         ## Convert node feat, pe to suitable dim before passing thu GNN layers
-        if self.scenario in [1, 2]:
-            x = node_subgraph_feat
-        if self.scenario in [3, 4, 5, 6]:
-            x = torch.cat((node_subgraph_feat, pe), -1)
-            x = self.lin_feat_pe(x)
-        if self.scenario in [7, 8, 9, 10]:
-            pe = self.lin_pe(pe)
-            x = node_subgraph_feat
+        pe = self.lin_pe(pe)
+        x = node_subgraph_feat
+
+        if self.scenario in [9, 10, 11, 12, 13, 14, 15, 16]:
+            edge_type = edge_type.unsqueeze(-1).float()
+            edge_embd = self.edge_embd(edge_type)
+            x = self.lin_x(x)
 
         ## Apply graph size norm
-        if self.scenario in [2, 5, 6, 9, 10]:
+        if self.scenario in [3, 4, 11, 12, 15, 16]:
             x = self.graphsizenorm(x, batch)
 
         ## Pass node feat thru GNN layers
         concat_states = []
-        x_before = x
-
+        # x_before = x
         for conv in self.convs:
-            if self.scenario in [1, 2, 3, 4, 5, 6]:
-                x = torch.tanh(conv(x, edge_index, edge_type))
-            elif self.scenario in [7, 8, 9, 10]:
+            if self.scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
                 x, pe = conv(x, pe, edge_index, edge_type)
+            elif self.scenario in [9, 10, 11, 12, 13, 14, 15, 16]:
+                x, edge_embd, pe = conv(x, edge_embd, edge_index, pe)
             else:
                 raise NotImplementedError()
 
-            concat_states.append(x)
+            if self.scenario in [5, 6, 7, 8, 13, 14, 15, 16]:
+                concat_states.append(torch.cat((x, pe), dim=-1))
+            elif self.scenario in [1, 2, 3, 4, 9, 10, 11, 12]:
+                concat_states.append(x)
+            else:
+                raise NotImplementedError()
+
         concat_states = torch.cat(concat_states, 1)
 
         ## NOTE: Enable the following if using EdgeAugment

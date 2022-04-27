@@ -1,3 +1,9 @@
+## Apr 27 | 10:20
+
+- Replace **TransformerEncoder** by **Hyper Mixer**
+- Add **Distance Encoding** implementation but currently not used
+- Fix error not calculating ARR loss with scenarios using **R-GCN-LSPE**
+
 ## Apr 4 | 10:15
 
 - Add scenarios using _GatedGCN-LSPE_

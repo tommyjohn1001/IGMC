@@ -6,7 +6,7 @@ from torch_geometric.utils import dropout_adj
 
 from layers import *
 from util_functions import *
-
+from hypermixer import HyperMixerLayer
 
 class IGMC(GNN):
     # The GNN model of Inductive Graph-based Matrix Completion.
@@ -77,9 +77,12 @@ class IGMC(GNN):
             for i in range(0, len(latent_dim) - 1):
                 self.convs.append(gconv(latent_dim[i], latent_dim[i + 1]))
 
-        self.trans_encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=4, nhead=2), 4
-        )
+        ## NOTE: Temporarily disabled
+        # self.trans_encoder = nn.TransformerEncoder(
+        #     nn.TransformerEncoderLayer(d_model=4, nhead=2), 4
+        # )
+        self.hyper_mixer = nn.Sequential(*[HyperMixerLayer(N=420, hid_dim=4) for _ in range(4)])
+        # self.hyper_mixer = HyperMixerLayer(N=420, hid_dim=4)
 
         if scenario in [1, 2, 3, 4, 9, 10, 11, 12]:
             self.lin1 = Linear(2 * sum(latent_dim), 128)
@@ -129,7 +132,6 @@ class IGMC(GNN):
         return mask
 
     def forward(self, data, epoch=-1, is_training=True):
-
         x, edge_index, edge_type, batch, non_edges = (
             data.x,
             data.edge_index,
@@ -155,8 +157,11 @@ class IGMC(GNN):
             x[:, self.node_feat_dim + 1 :],
         )
 
-        mask = self.create_trans_mask(batch, x.dtype, x.device)
-        node_subgraph_feat = self.trans_encoder(node_subgraph_feat.unsqueeze(1), mask).squeeze(1)
+        # NOTE: Temporarily disable this
+        # mask = self.create_trans_mask(batch, x.dtype, x.device)
+        # node_subgraph_feat = self.trans_encoder(node_subgraph_feat.unsqueeze(1), mask).squeeze(1)
+        for hyper_mixer in self.hyper_mixer:
+            node_subgraph_feat = hyper_mixer(node_subgraph_feat, batch)
 
         ## Convert node feat, pe to suitable dim before passing thu GNN layers
         pe = self.lin_pe(pe)

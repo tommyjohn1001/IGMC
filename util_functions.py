@@ -22,6 +22,7 @@ import torch_geometric.utils as pyg_utils
 from torch_geometric.data import Data, Dataset, InMemoryDataset
 from tqdm import tqdm
 from torch_geometric.utils import degree
+from torch_geometric.utils.convert import to_networkx
 
 warnings.simplefilter('ignore', ssp.SparseEfficiencyWarning)
 cur_dir = os.path.dirname(os.path.realpath(__file__))
@@ -306,7 +307,7 @@ def init_positional_encoding(g, pos_enc_dim):
         # Geometric diffusion features with Random Walk
         A = ssp.csr_matrix(pyg_utils.to_dense_adj(g.edge_index).squeeze().numpy())
         Dinv = ssp.diags(pyg_utils.degree(g.edge_index[0]).numpy().clip(1) ** -1.0) # D^-1
-        RW = A * Dinv  
+        RW = A * Dinv
         M = RW
         
         # Iterate
@@ -321,6 +322,29 @@ def init_positional_encoding(g, pos_enc_dim):
 
     ## Concate PE to node feat
     g.x = torch.cat((g.x, PE), -1)
+
+
+def get_features_sp_sample(g, max_sp):
+    max_sp -= 2
+
+    G = to_networkx(g)
+    target_user = torch.where(g.x[:,1] == 1)[0].item()
+    target_item = torch.where(g.x[:,2] == 1)[0].item()
+    target_node_set = np.array([target_user, target_item])
+
+    dim = max_sp + 2
+    set_size = len(target_node_set)
+    sp_length = np.ones((G.number_of_nodes(), set_size), dtype=np.int32) * -1
+    for i, node in enumerate(target_node_set):
+        for node_ngh, length in nx.shortest_path_length(G, source=node).items():
+            sp_length[node_ngh, i] = length
+    sp_length = np.minimum(sp_length, max_sp)
+    onehot_encoding = np.eye(dim, dtype=np.float64)  # [n_features, n_features]
+    features_sp = onehot_encoding[sp_length].sum(axis=1)
+
+    ## Concate PE to node feat
+    g.x = torch.cat((g.x, torch.from_numpy(features_sp)), -1).float()
+
 
 def get_non_edges(example: Data, k: int = 50) -> list:
     user_node_idx = torch.where((example.x[:, 1] == 1) | (example.x[:, 3] == 1))
@@ -367,6 +391,10 @@ def construct_pyg_graph(u, v, r, node_labels, max_node_label, y, node_features, 
 
     ## Add PE info
     init_positional_encoding(data, pos_enc_dim=pos_enc_dim)
+
+    # NOTE: if using DE, use the following
+    ## Add DE info
+    # get_features_sp_sample(data, pos_enc_dim)
 
     ## Add non-edges
     non_edges = get_non_edges(data)

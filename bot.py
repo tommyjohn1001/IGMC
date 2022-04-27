@@ -4,14 +4,13 @@ import random
 from datetime import datetime, timedelta
 
 PE_DIMS = {"common": 40, "yahoo_music": 140, "douban": 115, "flixster": 86, "ml_100k": 80}
-TIMES = 1
+TIMES = 3
 
 
 def flix_dou_yah(dataset, pe_dim, scenario, cuda_device, ith):
     now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H:%M")
-    SEED = 1  # random.randint(0, 10)
+    SEED = random.randint(0, 10)
     epoch = 20 if dataset == "yahoo_music" else 40
-    cuda_device = 0
 
     os.system(
         f"CUDA_VISIBLE_DEVICES={cuda_device} python Main.py\
@@ -29,8 +28,7 @@ def flix_dou_yah(dataset, pe_dim, scenario, cuda_device, ith):
 
 def movielens(dataset, pe_dim, scenario, cuda_device, ith, batch_size=30):
     now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H:%M")
-    SEED = 1  # random.randint(0, 10)
-    cuda_device = 0
+    SEED = 0
 
     os.system(
         f"CUDA_VISIBLE_DEVICES={cuda_device} python Main.py\
@@ -52,21 +50,19 @@ def movielens(dataset, pe_dim, scenario, cuda_device, ith, batch_size=30):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Inductive Graph-based Matrix Completion")
     parser.add_argument("--scenario", type=int)
+    parser.add_argument("--gpu", "-g", type=int)
 
     args = parser.parse_args()
 
-    cuda_device = args.scenario % 2
+    cuda_device = args.gpu
 
-    for dataset in ["ml_100k"]:  # "ml_100k" "yahoo_music", "flixster", "douban"
+    for dataset in ["yahoo_music"]:  # "ml_100k" "yahoo_music", "flixster", "douban"
         for ith in range(TIMES):
-            if args.scenario in [1, 2]:
-                pe_dim = 1
-            elif args.scenario in [3, 5, 7, 9]:
+            if args.scenario % 2 == 1:
                 pe_dim = PE_DIMS["common"]
-            elif args.scenario in [4, 6, 8, 10]:
-                pe_dim = PE_DIMS[dataset]
             else:
-                raise NotImplementedError()
+                pe_dim = PE_DIMS[dataset]
 
             # if superpod, use batch_size = 40
-            movielens(dataset, pe_dim, args.scenario, cuda_device, ith)
+            # movielens(dataset, pe_dim, args.scenario, cuda_device, ith, batch_size=30)
+            flix_dou_yah(dataset, pe_dim, args.scenario, cuda_device, ith)

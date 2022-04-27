@@ -181,8 +181,16 @@ def train(
         if show_progress:
             pbar.set_description("Epoch {}, batch loss: {}".format(epoch, loss.item()))
 
-        w = model.edge_embd.weight
-        reg_loss = torch.sum((w[1:] - w[:-1]) ** 2)
+        if args.scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
+            for gconv in model.convs:
+                w = torch.matmul(
+                    gconv.att, 
+                    gconv.basis.view(gconv.num_bases, -1)
+                ).view(gconv.num_relations, gconv.in_channels, gconv.out_channels)
+                reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :])**2)
+        elif args.scenario in [9, 10, 11, 12, 13, 14, 15, 16]:
+            w = model.edge_embd.weight
+            reg_loss = torch.sum((w[1:] - w[:-1]) ** 2)
         loss += ARR * reg_loss
 
         if args.wandb and ith % 5 == 0:

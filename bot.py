@@ -4,12 +4,12 @@ import random
 from datetime import datetime, timedelta
 
 PE_DIMS = {"common": 40, "yahoo_music": 140, "douban": 115, "flixster": 86, "ml_100k": 80}
-TIMES = 3
+TIMES = 2
 
 
 def flix_dou_yah(dataset, pe_dim, scenario, cuda_device, ith):
     now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H:%M")
-    SEED = random.randint(0, 10)
+    SEED = 1 if ith % 2 ==0 else 6
     epoch = 20 if dataset == "yahoo_music" else 40
 
     os.system(
@@ -56,7 +56,7 @@ if __name__ == "__main__":
 
     cuda_device = args.gpu
 
-    for dataset in ["yahoo_music"]:  # "ml_100k" "yahoo_music", "flixster", "douban"
+    for dataset in ["yahoo_music", "flixster"]:  # "ml_100k" "yahoo_music", "flixster", "douban"
         for ith in range(TIMES):
             if args.scenario % 2 == 1:
                 pe_dim = PE_DIMS["common"]

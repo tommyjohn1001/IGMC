@@ -1,3 +1,8 @@
+## May 6 | 20:23
+
+- Add Regularization trick's implementation (ongoing)
+- Replace GNN-LSPE by original GNN (ongoing)
+
 ## Apr 27 | 10:20
 
 - Replace **TransformerEncoder** by **Hyper Mixer**

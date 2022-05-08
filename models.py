@@ -140,6 +140,8 @@ class IGMC(GNN):
             data.non_edge_index,
         )
 
+        device, dtype = x.device, x.dtype
+
         if self.adj_dropout > 0:
             edge_index, edge_type = dropout_adj(
                 edge_index,
@@ -156,6 +158,19 @@ class IGMC(GNN):
             x[:, 1 : self.node_feat_dim + 1],
             x[:, self.node_feat_dim + 1 :],
         )
+
+        ## NOTE: Randomize node feat
+        # node_subgraph_feat = torch.rand_like(node_subgraph_feat)
+
+        ## Node-set random feat
+        user_idx, item_idx = torch.where(node_subgraph_feat[:, 0] == 1)[0], torch.where(node_subgraph_feat[:, 1] == 1)[0]
+
+        rand_feats = torch.ones_like(node_subgraph_feat)
+        feats_notS = torch.rand(node_subgraph_feat.size(-1), device=device, dtype=dtype)
+        feats_S = torch.rand(node_subgraph_feat.size(-1), device=device, dtype=dtype)
+
+        rand_feats = rand_feats * feats_notS
+        rand_feats[user_idx] = rand_feats[item_idx] = feats_S
 
         # NOTE: Temporarily disable this
         # mask = self.create_trans_mask(batch, x.dtype, x.device)

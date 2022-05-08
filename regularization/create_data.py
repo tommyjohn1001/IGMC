@@ -1,60 +1,14 @@
-from __future__ import print_function
+from multiprocessing import Pool
 
-import argparse
-import itertools
-import math
-import multiprocessing as mp
-import os
-import pdb
-import random
-import sys
-import time
-import warnings
-from copy import deepcopy
-
-import networkx as nx
 import numpy as np
-import scipy.io as sio
 import scipy.sparse as ssp
-import torch
-import torch.nn as nn
-import torch_geometric.utils as pyg_utils
-from torch_geometric.data import Data, Dataset, InMemoryDataset
-from torch_geometric.utils import degree
-from torch_geometric.utils.convert import to_networkx
-from tqdm import tqdm
-
-warnings.simplefilter("ignore", ssp.SparseEfficiencyWarning)
-cur_dir = os.path.dirname(os.path.realpath(__file__))
 import torch.multiprocessing
+from all_packages import *
+from preprocessing import load_data_monti
+from regex import E
+from torch_geometric.data import Data
 
 torch.multiprocessing.set_sharing_strategy("file_system")
-
-def create_data():
-    g_list = []
-
-    with tqdm(total=len(links[0])) as pbar:
-        for i, j, g_label in zip(links[0], links[1], labels):
-            tmp = subgraph_extraction_labeling(
-                (i, j),
-                Arow,
-                Acol,
-                h,
-                sample_ratio,
-                max_nodes_per_hop,
-                u_features,
-                v_features,
-                class_values,
-                g_label,
-            )
-            data = construct_pyg_graph(*tmp, pe_dim)
-            if data is not None:
-                g_list.append(data)
-            pbar.update(1)
-
-    # Save 
-
-
 
 
 class SparseRowIndexer:
@@ -106,215 +60,18 @@ class SparseColIndexer:
         return ssp.csc_matrix((data, indices, indptr), shape=shape)
 
 
-class MyDataset(InMemoryDataset):
-    def __init__(
-        self,
-        root,
-        A,
-        links,
-        labels,
-        h,
-        sample_ratio,
-        max_nodes_per_hop,
-        u_features,
-        v_features,
-        class_values,
-        pe_dim,
-        max_num=None,
-        parallel=True,
-    ):
-        self.Arow = SparseRowIndexer(A)
-        self.Acol = SparseColIndexer(A.tocsc())
-        self.links = links
-        self.labels = labels
-        self.h = h
-        self.sample_ratio = sample_ratio
-        self.max_nodes_per_hop = max_nodes_per_hop
-        self.u_features = u_features
-        self.v_features = v_features
-        self.class_values = class_values
-        self.parallel = parallel
-        self.max_num = max_num
-        self.pe_dim = pe_dim
-        if max_num is not None:
-            np.random.seed(123)
-            num_links = len(links[0])
-            perm = np.random.permutation(num_links)
-            perm = perm[:max_num]
-            self.links = (links[0][perm], links[1][perm])
-            self.labels = labels[perm]
-        super(MyDataset, self).__init__(root)
-        self.data, self.slices = torch.load(self.processed_paths[0])
-
-    @property
-    def processed_file_names(self):
-        name = "data.pt"
-        if self.max_num is not None:
-            name = "data_{}.pt".format(self.max_num)
-        return [name]
-
-    def process(self):
-        # Extract enclosing subgraphs and save to disk
-        data_list = links2subgraphs(
-            self.Arow,
-            self.Acol,
-            self.links,
-            self.labels,
-            self.h,
-            self.pe_dim,
-            self.sample_ratio,
-            self.max_nodes_per_hop,
-            self.u_features,
-            self.v_features,
-            self.class_values,
-            self.parallel,
-        )
-
-        data, slices = self.collate(data_list)
-        torch.save((data, slices), self.processed_paths[0])
-        del data_list
+def neighbors(fringe, A):
+    # find all 1-hop neighbors of nodes in fringe from A
+    if not fringe:
+        return set([])
+    return set(A[list(fringe)].indices)
 
 
-class MyDynamicDataset(Dataset):
-    def __init__(
-        self,
-        root,
-        A,
-        links,
-        labels,
-        h,
-        sample_ratio,
-        max_nodes_per_hop,
-        u_features,
-        v_features,
-        class_values,
-        pe_dim,
-        max_num=None,
-    ):
-        super(MyDynamicDataset, self).__init__(root)
-        self.Arow = SparseRowIndexer(A)
-        self.Acol = SparseColIndexer(A.tocsc())
-        self.links = links
-        self.labels = labels
-        self.h = h
-        self.sample_ratio = sample_ratio
-        self.max_nodes_per_hop = max_nodes_per_hop
-        self.u_features = u_features
-        self.v_features = v_features
-        self.class_values = class_values
-        self.pe_dim = pe_dim
-        if max_num is not None:
-            np.random.seed(123)
-            num_links = len(links[0])
-            perm = np.random.permutation(num_links)
-            perm = perm[:max_num]
-            self.links = (links[0][perm], links[1][perm])
-            self.labels = labels[perm]
-
-    def __len__(self):
-        return len(self.links[0])
-
-    def get(self, idx):
-        i, j = self.links[0][idx], self.links[1][idx]
-        g_label = self.labels[idx]
-        tmp = subgraph_extraction_labeling(
-            (i, j),
-            self.Arow,
-            self.Acol,
-            self.h,
-            self.sample_ratio,
-            self.max_nodes_per_hop,
-            self.u_features,
-            self.v_features,
-            self.class_values,
-            g_label,
-        )
-        return construct_pyg_graph(*tmp, self.pe_dim)
-
-
-def links2subgraphs(
-    Arow,
-    Acol,
-    links,
-    labels,
-    h=1,
-    pe_dim=1,
-    sample_ratio=1.0,
-    max_nodes_per_hop=None,
-    u_features=None,
-    v_features=None,
-    class_values=None,
-    parallel=True,
-):
-    # extract enclosing subgraphs
-    print("Enclosing subgraph extraction begins...")
-    g_list = []
-    if not parallel:
-        with tqdm(total=len(links[0])) as pbar:
-            for i, j, g_label in zip(links[0], links[1], labels):
-                tmp = subgraph_extraction_labeling(
-                    (i, j),
-                    Arow,
-                    Acol,
-                    h,
-                    sample_ratio,
-                    max_nodes_per_hop,
-                    u_features,
-                    v_features,
-                    class_values,
-                    g_label,
-                )
-                data = construct_pyg_graph(*tmp, pe_dim)
-                if data is not None:
-                    g_list.append(data)
-                pbar.update(1)
-    else:
-        start = time.time()
-        pool = mp.Pool(mp.cpu_count())
-        results = pool.starmap_async(
-            subgraph_extraction_labeling,
-            [
-                (
-                    (i, j),
-                    Arow,
-                    Acol,
-                    h,
-                    sample_ratio,
-                    max_nodes_per_hop,
-                    u_features,
-                    v_features,
-                    class_values,
-                    g_label,
-                )
-                for i, j, g_label in zip(links[0], links[1], labels)
-            ],
-        )
-        remaining = results._number_left
-        pbar = tqdm(total=remaining)
-        while True:
-            pbar.update(remaining - results._number_left)
-            if results.ready():
-                break
-            remaining = results._number_left
-            time.sleep(1)
-        results = results.get()
-        pool.close()
-        pbar.close()
-        end = time.time()
-        print("Time elapsed for subgraph extraction: {}s".format(end - start))
-        print("Transforming to pytorch_geometric graphs...")
-        g_list = []
-        pbar = tqdm(total=len(results))
-        while results:
-            tmp = results.pop()
-            data = construct_pyg_graph(*tmp, pe_dim)
-            if data is not None:
-                g_list.append(data)
-            pbar.update(1)
-        pbar.close()
-        end2 = time.time()
-        print("Time elapsed for transforming to pytorch_geometric graphs: {}s".format(end2 - end))
-    return g_list
+def one_hot(idx, length):
+    idx = np.array(idx)
+    x = np.zeros([len(idx), length])
+    x[np.arange(len(idx)), idx] = 1.0
+    return x
 
 
 def subgraph_extraction_labeling(
@@ -399,59 +156,6 @@ def subgraph_extraction_labeling(
     return u, v, r, node_labels, max_node_label, y, node_features, node_index
 
 
-def init_positional_encoding(g, pos_enc_dim):
-    """
-    Initializing positional encoding with RWPE
-    """
-
-    if len(g.edge_type) == 0:
-        node_feat = g.x
-        PE = torch.zeros(
-            (node_feat.size(0), pos_enc_dim), dtype=node_feat.dtype, device=node_feat.device
-        )
-    else:
-        # Geometric diffusion features with Random Walk
-        A = ssp.csr_matrix(pyg_utils.to_dense_adj(g.edge_index).squeeze().numpy())
-        Dinv = ssp.diags(pyg_utils.degree(g.edge_index[0]).numpy().clip(1) ** -1.0)  # D^-1
-        RW = A * Dinv
-        M = RW
-
-        # Iterate
-        nb_pos_enc = pos_enc_dim
-        PE = [torch.from_numpy(M.diagonal()).float()]
-        M_power = M
-        for _ in range(nb_pos_enc - 1):
-            M_power = M_power * M
-            PE.append(torch.from_numpy(M_power.diagonal()).float())
-
-        PE = torch.stack(PE, dim=-1)
-
-    ## Concate PE to node feat
-    g.x = torch.cat((g.x, PE), -1)
-
-
-def get_features_sp_sample(g, max_sp):
-    max_sp -= 2
-
-    G = to_networkx(g)
-    target_user = torch.where(g.x[:, 1] == 1)[0].item()
-    target_item = torch.where(g.x[:, 2] == 1)[0].item()
-    target_node_set = np.array([target_user, target_item])
-
-    dim = max_sp + 2
-    set_size = len(target_node_set)
-    sp_length = np.ones((G.number_of_nodes(), set_size), dtype=np.int32) * -1
-    for i, node in enumerate(target_node_set):
-        for node_ngh, length in nx.shortest_path_length(G, source=node).items():
-            sp_length[node_ngh, i] = length
-    sp_length = np.minimum(sp_length, max_sp)
-    onehot_encoding = np.eye(dim, dtype=np.float64)  # [n_features, n_features]
-    features_sp = onehot_encoding[sp_length].sum(axis=1)
-
-    ## Concate PE to node feat
-    g.x = torch.cat((g.x, torch.from_numpy(features_sp)), -1).float()
-
-
 def get_non_edges(example: Data, k: int = 50) -> list:
     user_node_idx = torch.where((example.x[:, 1] == 1) | (example.x[:, 3] == 1))
     item_node_idx = torch.where((example.x[:, 2] == 1) | (example.x[:, 4] == 1))
@@ -471,30 +175,6 @@ def get_non_edges(example: Data, k: int = 50) -> list:
     non_edges = random.sample(non_edges, k=k)
 
     return non_edges
-
-
-def create_trg_regu_matrix(n_nodes: int, trg_user_idx: int, trg_item_idx: int):
-    """Create target matrix for training regularization loss which is achieved by ContrastiveLoss
-
-    Args:
-        n_nodes (int): no. nodes
-        trg_user_idx (int): index of target user
-        trg_item_idx (int): index of target item
-    """
-    pass
-
-
-def create_permute_matrix(size):
-    indices = list(range(size))
-    random.shuffle(indices)
-
-    permutation_map = {old: new for old, new in zip(range(size), indices)}
-
-    permutation_matrix = torch.zeros((size, size))
-    for i, j in enumerate(indices):
-        permutation_matrix[i][j] = 1
-
-    return permutation_matrix, permutation_map
 
 
 def get_rwpe(A, D, pos_enc_dim=5):
@@ -518,49 +198,10 @@ def get_rwpe(A, D, pos_enc_dim=5):
     return PE
 
 
-def create_permuted_graphs(data: Data, n=10, pos_enc_dim=5):
-    if len(data.edge_index[0]) == 0:
-        x_perms = torch.zeros((n, data.x.size(0) + pos_enc_dim))
-        targets_perms = torch.zeros((n, 2))
-
-        return x_perms, targets_perms
-
-    ## Get matrix A and D
-    D = pyg_utils.degree(data.edge_index[0])
-    A = pyg_utils.to_dense_adj(data.edge_index).squeeze(0)
-
-    ## Get target user and item index
-    trg_user_idx, trg_item_idx = (
-        torch.where(data.x[:, 1] == 1)[0].item(),
-        torch.where(data.x[:, 2] == 1)[0].item(),
-    )
-
-    x_perms, targets_perms = [], []
-    for _ in range(n):
-        perm_matrix, perm_map = create_permute_matrix(len(D))
-
-        new_A = perm_matrix.T @ A @ perm_matrix
-        new_D = perm_matrix @ D.diag()
-        new_x = perm_matrix @ data.x
-        PE = get_rwpe(new_A, new_D.diagonal(), pos_enc_dim)
-        x_perm = torch.cat((new_x, PE), dim=-1).unsqueeze(1)
-
-        new_user_idx, new_item_idx = perm_map[trg_user_idx], perm_map[trg_item_idx]
-        targets_perm = torch.tensor([new_user_idx, new_item_idx]).unsqueeze(0)
-
-        x_perms.append(x_perm)
-        targets_perms.append(targets_perm)
-
-    x_perms = torch.cat(x_perms, dim=1)
-    targets_perms = torch.cat(targets_perms, dim=0)
-
-    return x_perms, targets_perms
-
-
 def construct_pyg_graph(
     u, v, r, node_labels, max_node_label, y, node_features, node_index, pos_enc_dim
 ):
-    # TODO: Append node index of each node in u, v, node index is fetched from u_nodes, v_nodes to append to node_feat
+    ## This condition to ensure graphs without neighbors are discarded
     if len(u) == 0:
         return None
 
@@ -573,91 +214,239 @@ def construct_pyg_graph(
     y = torch.FloatTensor([y])
     data = Data(x, edge_index, edge_type=edge_type, y=y)
 
-    ## Concate with node index
-    data.x = torch.cat([node_index.unsqueeze(-1), data.x], 1)
-
-    if node_features is not None:
-        if type(node_features) == list:  # a list of u_feature and v_feature
-            u_feature, v_feature = node_features
-            data.u_feature = torch.FloatTensor(u_feature).unsqueeze(0)
-            data.v_feature = torch.FloatTensor(v_feature).unsqueeze(0)
-        else:
-            x2 = torch.FloatTensor(node_features)
-            data.x = torch.cat([data.x, x2], 1)
-
-    ## Add PE info
-    init_positional_encoding(data, pos_enc_dim=pos_enc_dim)
-
-    # NOTE: if using DE, use the following
-    ## Add DE info
-    # get_features_sp_sample(data, pos_enc_dim)
-
-    ## Add non-edges
-    non_edges = get_non_edges(data)
-    non_edges = torch.tensor(non_edges, dtype=torch.long).permute((1, 0))
-    data.non_edge_index = non_edges
-
-    # NOTE: replace DRNL by random initialization
-    # x1 = torch.FloatTensor(one_hot(node_labels, max_node_label+1))
-    x = torch.rand((len(node_labels), max_node_label + 1))
-    # if x.shape != x1.shape:
-    #     print(f"x : {x.shape}")
-    #     print(f"x1: {x1.shape}")
-    #     exit()
-
-    x_perms, targets_perms = create_permuted_graphs(data)
-    if len(x_perms.shape) < 3:
-        print(f"x_perms: {x_perms.shape} - targets_perms: {targets_perms.shape}")
-        exit()
-    data.x_perms, data.targets_perms = x_perms, targets_perms
-
     return data
 
 
-def neighbors(fringe, A):
-    # find all 1-hop neighbors of nodes in fringe from A
-    if not fringe:
-        return set([])
-    return set(A[list(fringe)].indices)
+def create_permute_matrix(size):
+    indices = list(range(size))
+    random.shuffle(indices)
+
+    permutation_map = {old: new for old, new in zip(range(size), indices)}
+
+    permutation_matrix = torch.zeros((size, size))
+    for i, j in enumerate(indices):
+        permutation_matrix[i][j] = 1
+
+    return permutation_matrix, permutation_map
 
 
-def one_hot(idx, length):
-    idx = np.array(idx)
-    x = np.zeros([len(idx), length])
-    x[np.arange(len(idx)), idx] = 1.0
-    return x
+def create_trg_regu_matrix(trg_user_idx, trg_item_idx, n_nodes: int):
+    """Create target matrix for training regularization loss which is achieved by ContrastiveLoss"""
+
+    trg_matrix = torch.ones((n_nodes, n_nodes))
+    S = set([trg_user_idx, trg_item_idx])
+
+    for i in range(n_nodes):
+        for j in range(n_nodes):
+            condition1 = i not in S and j in S
+            condition2 = i in S and j not in S
+            if condition1 or condition2:
+                trg_matrix[i, j] = 0
+
+    return trg_matrix
 
 
-def PyGGraph_to_nx(data):
-    edges = list(zip(data.edge_index[0, :].tolist(), data.edge_index[1, :].tolist()))
-    g = nx.from_edgelist(edges)
-    g.add_nodes_from(range(len(data.x)))  # in case some nodes are isolated
-    # transform r back to rating label
-    edge_types = {(u, v): data.edge_type[i].item() for i, (u, v) in enumerate(edges)}
-    nx.set_edge_attributes(g, name="type", values=edge_types)
-    node_types = dict(zip(range(data.num_nodes), torch.argmax(data.x, 1).tolist()))
-    nx.set_node_attributes(g, name="type", values=node_types)
-    g.graph["rating"] = data.y.item()
-    return g
+def create_permuted_graphs(data: Data, n=10, pos_enc_dim=5) -> list:
+    try:
+        if len(data.edge_index[0]) == 0:
+            x_perms = torch.zeros((n, data.x.size(0) + pos_enc_dim))
+            targets_perms = torch.zeros((n, 2))
+
+            return x_perms, targets_perms
+    except:
+        print(data)
+        exit()
+
+    ## Get matrix A and D
+    D = pyg_utils.degree(data.edge_index[0])
+    A = pyg_utils.to_dense_adj(data.edge_index).squeeze(0)
+
+    ## Get target user and item index
+    trg_user_idx, trg_item_idx = (
+        torch.where(data.x[:, 0] == 1)[0].item(),
+        torch.where(data.x[:, 1] == 1)[0].item(),
+    )
+
+    permuted_graphs = []
+    for _ in range(n):
+        perm_matrix, perm_map = create_permute_matrix(len(D))
+
+        new_A = perm_matrix.T @ A @ perm_matrix
+        new_D = perm_matrix @ D.diag()
+        x = get_rwpe(new_A, new_D.diagonal(), pos_enc_dim)
+
+        new_user_idx, new_item_idx = perm_map[trg_user_idx], perm_map[trg_item_idx]
+        trg = create_trg_regu_matrix(new_user_idx, new_item_idx, len(D))
+
+        permuted_graphs.append((x, trg))
+
+    return permuted_graphs
 
 
-class GraphSizeNorm(nn.Module):
-    r"""Applies Graph Size Normalization over each individual graph in a batch
-    of node features as described in the
-    `"Benchmarking Graph Neural Networks" <https://arxiv.org/abs/2003.00982>`_
-    paper
+import multiprocessing
 
-    .. math::
-        \mathbf{x}^{\prime}_i = \frac{\mathbf{x}_i}{\sqrt{|\mathcal{V}|}}
-    """
 
-    def __init__(self):
-        super().__init__()
+class ParallelHelper:
+    def __init__(
+        self,
+        f_task: object,
+        data: list,
+        data_allocation: object,
+        num_workers,
+        desc=None,
+        show_bar=False,
+        n_data=None,
+        *args,
+    ):
+        self.n_data = len(data) if n_data is None else n_data
+        self.show_bar = show_bar
 
-    def forward(self, x, batch=None):
-        """"""
-        if batch is None:
-            batch = torch.zeros(x.size(0), dtype=torch.long, device=x.device)
+        self.queue = multiprocessing.Queue()
+        if self.show_bar:
+            self.pbar = tqdm(total=self.n_data, desc=desc)
 
-        inv_sqrt_deg = degree(batch, dtype=x.dtype).pow(-0.5)
-        return x * inv_sqrt_deg.index_select(0, batch).view(-1, 1)
+        self.jobs = list()
+        for ith in range(num_workers):
+            lo_bound = ith * self.n_data // num_workers
+            hi_bound = (
+                (ith + 1) * self.n_data // num_workers if ith < (num_workers - 1) else self.n_data
+            )
+
+            p = multiprocessing.Process(
+                target=f_task,
+                args=(data_allocation(data, lo_bound, hi_bound), self.queue, *args),
+            )
+            self.jobs.append(p)
+
+    def launch(self) -> list:
+        """
+        Launch parallel process
+        Returns: a list after running parallel task
+        """
+        dataset = []
+
+        for job in self.jobs:
+            job.start()
+
+        cnt = 0
+        while cnt < self.n_data:
+            while not self.queue.empty():
+                dataset.append(self.queue.get())
+                cnt += 1
+
+                if self.show_bar:
+                    self.pbar.update()
+
+        if self.show_bar:
+            self.pbar.close()
+
+        for job in self.jobs:
+            job.terminate()
+
+        for job in self.jobs:
+            job.join()
+
+        return dataset
+
+
+def create_data(
+    args,
+    n_perm_graphs=20,
+    train_ratio=0.8,
+    parallel=True,
+    num_workers=8,
+):
+    g_list = []
+
+    for data_name in ["yahoo_music"]:  # "yahoo_music", "flixster", "douban"
+        logger.info(f"Dataset: {data_name}")
+
+        (
+            u_features,
+            v_features,
+            adj_train,
+            train_labels,
+            train_u_indices,
+            train_v_indices,
+            val_labels,
+            val_u_indices,
+            val_v_indices,
+            test_labels,
+            test_u_indices,
+            test_v_indices,
+            class_values,
+            n_nodes,
+        ) = load_data_monti(data_name, testing=True)
+
+        Arow = SparseRowIndexer(adj_train)
+        Acol = SparseColIndexer(adj_train.tocsc())
+
+        ## Create list of graphs
+        def core(u_indices, v_indices, labels) -> list:
+            g_lists_output = []
+            with tqdm(total=len(labels)) as pbar:
+                for i, j, g_label in zip(u_indices, v_indices, labels):
+                    tmp = subgraph_extraction_labeling(
+                        (i, j),
+                        Arow,
+                        Acol,
+                        args.hop,
+                        args.sample_ratio,
+                        args.max_nodes_per_hop,
+                        u_features,
+                        v_features,
+                        class_values,
+                        g_label,
+                    )
+                    data = construct_pyg_graph(*tmp, args.pe_dim)
+                    if data is not None:
+                        g_lists_output.append(data)
+
+                    pbar.update()
+
+            return g_lists_output
+
+        g_list.extend(core(train_u_indices, train_v_indices, train_labels))
+        g_list.extend(core(test_u_indices, test_v_indices, test_labels))
+
+    logger.info(f"No. graphs created: {len(g_list)}")
+
+    ## For each subgraph, create permutated versions
+    permuted_graphs = []
+    if not parallel:
+        for g in tqdm(g_list, desc="Create permuted graphs"):
+            permuted_graphs += create_permuted_graphs(g, n_perm_graphs, args.pe_dim)
+    else:
+
+        def f_create(data_list, queue, n, pos_enc_dim):
+            for data in data_list:
+                a = create_permuted_graphs(data, n, pos_enc_dim)
+                for x in a:
+                    queue.put(x)
+
+        permuted_graphs = ParallelHelper(
+            f_create,
+            g_list,
+            lambda dat, l, h: dat[l:h],
+            num_workers,
+            None,
+            True,
+            len(g_list) * n_perm_graphs,
+            n_perm_graphs,
+            args.pe_dim,
+        ).launch()
+
+    logger.info(f"No. permuted graphs created: {len(permuted_graphs)}")
+
+    ## Split into train/val split
+    random.shuffle(permuted_graphs)
+    n_train_samples = int(train_ratio * len(permuted_graphs))
+    data_train, data_val = permuted_graphs[:n_train_samples], permuted_graphs[n_train_samples:]
+
+    ## Save datasets
+    os.makedirs(args.path_dir_dataset)
+    path_data_train = osp.join(args.path_dir_dataset, "train_dataset.pkl")
+    path_data_val = osp.join(args.path_dir_dataset, "val_dataset.pkl")
+
+    torch.save(data_train, path_data_train)
+    torch.save(data_val, path_data_val)

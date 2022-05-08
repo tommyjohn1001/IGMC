@@ -1,7 +1,7 @@
 #!/bin/bash -e
 #SBATCH --job-name=IGMC            # create a short name for your job
-#SBATCH --output=/lustre/scratch/client/vinai/users/hoanglh88/IGMC/slurms/Mar7.out      # create a output file
-#SBATCH --error=/lustre/scratch/client/vinai/users/hoanglh88/IGMC/slurms/Mar7.err       # create a error file
+#SBATCH --output=/lustre/scratch/client/vinai/users/hoanglh88/IGMC/slurms/May8.out      # create a output file
+#SBATCH --error=/lustre/scratch/client/vinai/users/hoanglh88/IGMC/slurms/May8.err       # create a error file
 #SBATCH --partition=research
 #SBATCH --gres=gpu:1              # gpu count
 #SBATCH --ntasks=1                 # total number of tasks across all nodes
@@ -32,6 +32,7 @@ srun --container-image=/lustre/scratch/client/vinai/users/hoanglh88/utils/dc-min
      conda activate igmc/
 
      cd /hoanglh88/IGMC
-     python bot_samek.py --scenario 1 & python bot_samek.py --scenario 3
-     python bot_diffk.py --scenario 2 & python bot_diffk.py --scenario 4
+     # python bot_samek.py --scenario 1 & python bot_samek.py --scenario 3
+     # python bot_diffk.py --scenario 2 & python bot_diffk.py --scenario 4
+     python -m regularization.train
      "

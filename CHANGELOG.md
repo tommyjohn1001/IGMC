@@ -1,3 +1,7 @@
+## May 8 | 18:24
+
+- Finish implementing **Regularization trick**
+
 ## May 6 | 20:23
 
 - Add Regularization trick's implementation (ongoing)

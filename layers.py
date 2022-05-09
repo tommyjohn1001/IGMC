@@ -6,7 +6,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch_geometric.nn as pyg_nn
 from torch import Tensor, nn
-from torch.nn import Conv1d, Linear, Parameter
+from torch.nn import Conv1d, Linear, Parameter, Identity
 from torch_geometric.nn import GCNConv, global_add_pool, global_sort_pool
 from torch_geometric.nn.conv import MessagePassing, RGCNConv
 from torch_geometric.utils import dropout_adj
@@ -615,6 +615,8 @@ class NewRGCNConv(MessagePassing):
         if num_bases is not None:
             self.weight = Parameter(torch.Tensor(num_bases, in_channels[0], out_channels))
             self.comp = Parameter(torch.Tensor(num_relations, num_bases))
+            self.att = self.comp
+            self.basis = self.weight
 
         elif num_blocks is not None:
             assert in_channels[0] % num_blocks == 0 and out_channels % num_blocks == 0
@@ -1061,8 +1063,10 @@ class GNN(torch.nn.Module):
     def reset_parameters(self):
         # for conv in self.convs:
         #     conv.reset_parameters()
-        self.lin1.reset_parameters()
-        self.lin2.reset_parameters()
+        if not isinstance(self.lin1, Identity):
+            self.lin1.reset_parameters()
+        if not isinstance(self.lin2, Identity):
+            self.lin2.reset_parameters()
 
     def forward(self, data):
         x, edge_index, batch = data.x, data.edge_index, data.batch

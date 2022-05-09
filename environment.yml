@@ -54,6 +54,10 @@ dependencies:
   - zeromq=4.3.4
   - zlib=1.2.11
   - pip:
+    - --find-links https://download.pytorch.org/whl/torch
+    - --find-links https://download.pytorch.org/whl/torchvision
+    - --find-links https://download.pytorch.org/whl/torchaudio
+    - --find-links https://data.pyg.org/whl/torch-1.8.1+cu111.html
     - absl-py==1.0.0
     - aiohttp==3.8.1
     - aiosignal==1.2.0
@@ -169,4 +173,3 @@ dependencies:
     - yaspin==2.1.0
     - zipp==3.6.0
 prefix: /home/ubuntu/.conda/envs/igmc
-

@@ -85,7 +85,7 @@ def get_trainer(args):
         name=name,
         version=now,
     )
-    logger_wandb = WandbLogger(name, root_logging, project="IGMC_RegTrick")
+    # logger_wandb = WandbLogger(name, root_logging, project="IGMC_RegTrick")
 
     trainer = plt.Trainer(
         gpus=args.gpus,
@@ -94,7 +94,8 @@ def get_trainer(args):
         strategy="ddp" if len(args.gpus) > 1 else None,
         # log_every_n_steps=5,
         callbacks=[callback_ckpt, callback_tqdm, callback_lrmornitor],
-        logger=logger_wandb if args.wandb else logger_tboard,
+        # logger=logger_wandb if args.wandb else logger_tboard,
+        logger=logger_tboard,
     )
 
     return trainer

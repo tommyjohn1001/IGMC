@@ -5,6 +5,7 @@ from all_packages import *
 from regularization.create_data import create_data
 from regularization.utils import get_args, get_litdata, get_litmodel, get_trainer
 
+dotenv.load_dotenv(override=True)
 
 def train():
     ## Get args

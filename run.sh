@@ -42,4 +42,4 @@
 ###################
 ## 1. Run script for training Regularization trick
 ###################
-python -m regularization.train -g 1
+python -m regularization.train -g 0 

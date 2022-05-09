@@ -2,7 +2,7 @@ from all_packages import *
 
 
 def collate_fn(batch):
-    x, trg = [_[0] for _ in batch], [_[1] for _ in batch]
+    x, trg = [torch.from_numpy(_[0]) for _ in batch], [torch.from_numpy(_[1]) for _ in batch]
     # x: list of [n*, d]
     # trg: list of [n*, n*]
 
@@ -74,12 +74,20 @@ class ContrasLearnLitData(plt.LightningDataModule):
     def train_dataloader(self):
         """Return DataLoader for training."""
         return DataLoader(
-            self.data_train, shuffle=True, batch_size=self.batch_size, collate_fn=collate_fn
+            self.data_train,
+            shuffle=True,
+            batch_size=self.batch_size,
+            collate_fn=collate_fn,
+            num_workers=8,
         )
 
     def val_dataloader(self):
         """Return DataLoader for validation."""
 
         return DataLoader(
-            self.data_val, shuffle=False, batch_size=self.batch_size, collate_fn=collate_fn
+            self.data_val,
+            shuffle=False,
+            batch_size=self.batch_size,
+            collate_fn=collate_fn,
+            num_workers=8,
         )

@@ -423,7 +423,7 @@ def create_data(
             num_workers,
             None,
             True,
-            len(g_list) * 3, # Nếu đúng thì chỗ này phải nhân với n_perm_graphs
+            len(g_list) * 5,  # Nếu đúng thì chỗ này phải nhân với n_perm_graphs
             n_perm_graphs,
             args.pe_dim,
         ).launch()

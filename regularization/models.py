@@ -140,6 +140,7 @@ class ContrasLearnLitModel(plt.LightningModule):
     def __init__(
         self,
         d_pe,
+        batch_size=50,
         tau=0.07,
         eps=1e-8,
         dropout=0.25,
@@ -152,6 +153,7 @@ class ContrasLearnLitModel(plt.LightningModule):
 
         self._hparams = {
             "d_pe": d_pe,
+            "batch_size": batch_size,
             "tau": tau,
             "eps": eps,
             "dropout": dropout,
@@ -167,14 +169,14 @@ class ContrasLearnLitModel(plt.LightningModule):
     def training_step(self, batch: Any, batch_idx: int):
         loss_mse = self.model(*batch)
 
-        self.log("train_loss", loss_mse, on_step=True, on_epoch=True)
+        self.log("train_loss", loss_mse, on_step=True, on_epoch=True, batch_size=self._hparams['batch_size'])
 
         return loss_mse
 
     def validation_step(self, batch: Any, batch_idx: int):
         loss_mse = self.model(*batch)
 
-        self.log("val_loss", loss_mse, on_step=False, on_epoch=True)
+        self.log("val_loss", loss_mse, on_step=False, on_epoch=True,batch_size=self._hparams['batch_size'])
 
         return loss_mse
 

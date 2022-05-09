@@ -43,6 +43,7 @@ def get_args():
 def get_litmodel(args):
     litmodel = ContrasLearnLitModel(
         args.pe_dim,
+        batch_size=args.batch_size,
         tau=args.tau,
         eps=args.eps,
         dropout=args.dropout,

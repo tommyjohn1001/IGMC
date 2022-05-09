@@ -1,11 +1,10 @@
-from multiprocessing import Pool
+import multiprocessing
 
 import numpy as np
 import scipy.sparse as ssp
 import torch.multiprocessing
 from all_packages import *
 from preprocessing import load_data_monti
-from regex import E
 from torch_geometric.data import Data
 
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -247,15 +246,11 @@ def create_trg_regu_matrix(trg_user_idx, trg_item_idx, n_nodes: int):
 
 
 def create_permuted_graphs(data: Data, n=10, pos_enc_dim=5) -> list:
-    try:
-        if len(data.edge_index[0]) == 0:
-            x_perms = torch.zeros((n, data.x.size(0) + pos_enc_dim))
-            targets_perms = torch.zeros((n, 2))
+    if len(data.edge_index[0]) == 0:
+        x_perms = torch.zeros((n, data.x.size(0) + pos_enc_dim))
+        targets_perms = torch.zeros((n, 2))
 
-            return x_perms, targets_perms
-    except:
-        print(data)
-        exit()
+        return x_perms, targets_perms
 
     ## Get matrix A and D
     D = pyg_utils.degree(data.edge_index[0])
@@ -278,12 +273,9 @@ def create_permuted_graphs(data: Data, n=10, pos_enc_dim=5) -> list:
         new_user_idx, new_item_idx = perm_map[trg_user_idx], perm_map[trg_item_idx]
         trg = create_trg_regu_matrix(new_user_idx, new_item_idx, len(D))
 
-        permuted_graphs.append((x, trg))
+        permuted_graphs.append((x.numpy(), trg.numpy()))
 
     return permuted_graphs
-
-
-import multiprocessing
 
 
 class ParallelHelper:
@@ -431,7 +423,7 @@ def create_data(
             num_workers,
             None,
             True,
-            len(g_list) * n_perm_graphs,
+            len(g_list) * 3, # Nếu đúng thì chỗ này phải nhân với n_perm_graphs
             n_perm_graphs,
             args.pe_dim,
         ).launch()

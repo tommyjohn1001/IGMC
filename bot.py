@@ -9,8 +9,8 @@ TIMES = 2
 
 def flix_dou_yah(dataset, pe_dim, scenario, cuda_device, ith):
     now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H:%M")
-    SEED = 1 if ith % 2 ==0 else 6
-    epoch = 20 if dataset == "yahoo_music" else 40
+    SEED = random.randint(0, 20)
+    epoch = 40
 
     os.system(
         f"CUDA_VISIBLE_DEVICES={cuda_device} python Main.py\

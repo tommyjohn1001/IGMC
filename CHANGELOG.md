@@ -1,3 +1,9 @@
+## May 10 | 10:33
+
+- Fix error in creating data for training Regularization trick
+- Add some configs to plug the trained MLP in Regularization trick to main training flow
+- Some changes in IGMC model
+
 ## May 8 | 18:24
 
 - Finish implementing **Regularization trick**

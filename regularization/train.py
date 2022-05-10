@@ -7,15 +7,21 @@ from regularization.utils import get_args, get_litdata, get_litmodel, get_traine
 
 dotenv.load_dotenv(override=True)
 
+
 def train():
     ## Get args
     args = get_args()
 
+    path_dir_weights = args.path_dir_mlp_weights
+    if not osp.isdir(path_dir_weights):
+        os.makedirs(path_dir_weights, exist_ok=True)
+    path_mlp_weights = osp.join(path_dir_weights, f"mlp_{args.dataset}_{args.pe_dim}.pt")
+
     ## Create data if not available
-    if not osp.isdir(args.path_dir_dataset):
+    if not osp.isfile(path_mlp_weights):
         logger.info("Data not created. Creating...")
 
-        create_data(args, num_workers=8)
+    create_data(args, num_workers=12)
 
     ## Create model, Trainer
     logger.info("Start training")
@@ -29,10 +35,7 @@ def train():
     ## Save weights of MLP
     logger.info("Save weights of MLP")
 
-    path_dir_weights = osp.dirname(args.path_mlp_weights)
-    if not osp.isdir(path_dir_weights):
-        os.makedirs(path_dir_weights, exist_ok=True)
-    torch.save(lit_model.model.mlp.state_dict(), args.path_mlp_weights)
+    torch.save(lit_model.model.mlp.state_dict(), path_mlp_weights)
 
 
 if __name__ == "__main__":

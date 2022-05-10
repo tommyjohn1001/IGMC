@@ -130,27 +130,10 @@ def subgraph_extraction_labeling(
     if v_features is not None:
         v_features = v_features[v_nodes]
     node_features = None
-    if False:
-        # directly use padded node features
-        if u_features is not None and v_features is not None:
-            u_extended = np.concatenate(
-                [u_features, np.zeros([u_features.shape[0], v_features.shape[1]])], 1
-            )
-            v_extended = np.concatenate(
-                [np.zeros([v_features.shape[0], u_features.shape[1]]), v_features], 1
-            )
-            node_features = np.concatenate([u_extended, v_extended], 0)
-    if False:
-        # use identity features (one-hot encodings of node idxes)
-        u_ids = one_hot(u_nodes, Arow.shape[0] + Arow.shape[1])
-        v_ids = one_hot([x + Arow.shape[0] for x in v_nodes], Arow.shape[0] + Arow.shape[1])
-        node_ids = np.concatenate([u_ids, v_ids], 0)
-        # node_features = np.concatenate([node_features, node_ids], 1)
-        node_features = node_ids
-    if True:
-        # only output node features for the target user and item
-        if u_features is not None and v_features is not None:
-            node_features = [u_features[0], v_features[0]]
+
+    # only output node features for the target user and item
+    if u_features is not None and v_features is not None:
+        node_features = [u_features[0], v_features[0]]
 
     return u, v, r, node_labels, max_node_label, y, node_features, node_index
 
@@ -266,9 +249,9 @@ def create_permuted_graphs(data: Data, n=10, pos_enc_dim=5) -> list:
     for _ in range(n):
         perm_matrix, perm_map = create_permute_matrix(len(D))
 
-        new_A = perm_matrix.T @ A @ perm_matrix
-        new_D = perm_matrix @ D.diag()
-        x = get_rwpe(new_A, new_D.diagonal(), pos_enc_dim)
+        new_A = perm_matrix @ A @ perm_matrix.T
+        new_D = perm_matrix @ D
+        x = get_rwpe(new_A, new_D, pos_enc_dim)
 
         new_user_idx, new_item_idx = perm_map[trg_user_idx], perm_map[trg_item_idx]
         trg = create_trg_regu_matrix(new_user_idx, new_item_idx, len(D))
@@ -343,63 +326,58 @@ class ParallelHelper:
 
 def create_data(
     args,
-    n_perm_graphs=20,
     train_ratio=0.8,
     parallel=True,
     num_workers=8,
 ):
     g_list = []
+    (
+        u_features,
+        v_features,
+        adj_train,
+        train_labels,
+        train_u_indices,
+        train_v_indices,
+        val_labels,
+        val_u_indices,
+        val_v_indices,
+        test_labels,
+        test_u_indices,
+        test_v_indices,
+        class_values,
+        n_nodes,
+    ) = load_data_monti(args.dataset, testing=True)
 
-    for data_name in ["yahoo_music"]:  # "yahoo_music", "flixster", "douban"
-        logger.info(f"Dataset: {data_name}")
+    Arow = SparseRowIndexer(adj_train)
+    Acol = SparseColIndexer(adj_train.tocsc())
 
-        (
-            u_features,
-            v_features,
-            adj_train,
-            train_labels,
-            train_u_indices,
-            train_v_indices,
-            val_labels,
-            val_u_indices,
-            val_v_indices,
-            test_labels,
-            test_u_indices,
-            test_v_indices,
-            class_values,
-            n_nodes,
-        ) = load_data_monti(data_name, testing=True)
+    ## Create list of graphs
+    def core(u_indices, v_indices, labels) -> list:
+        g_lists_output = []
+        with tqdm(total=len(labels)) as pbar:
+            for i, j, g_label in zip(u_indices, v_indices, labels):
+                tmp = subgraph_extraction_labeling(
+                    (i, j),
+                    Arow,
+                    Acol,
+                    args.hop,
+                    args.sample_ratio,
+                    args.max_nodes_per_hop,
+                    u_features,
+                    v_features,
+                    class_values,
+                    g_label,
+                )
+                data = construct_pyg_graph(*tmp, args.pe_dim)
+                if data is not None:
+                    g_lists_output.append(data)
 
-        Arow = SparseRowIndexer(adj_train)
-        Acol = SparseColIndexer(adj_train.tocsc())
+                pbar.update()
 
-        ## Create list of graphs
-        def core(u_indices, v_indices, labels) -> list:
-            g_lists_output = []
-            with tqdm(total=len(labels)) as pbar:
-                for i, j, g_label in zip(u_indices, v_indices, labels):
-                    tmp = subgraph_extraction_labeling(
-                        (i, j),
-                        Arow,
-                        Acol,
-                        args.hop,
-                        args.sample_ratio,
-                        args.max_nodes_per_hop,
-                        u_features,
-                        v_features,
-                        class_values,
-                        g_label,
-                    )
-                    data = construct_pyg_graph(*tmp, args.pe_dim)
-                    if data is not None:
-                        g_lists_output.append(data)
+        return g_lists_output
 
-                    pbar.update()
-
-            return g_lists_output
-
-        g_list.extend(core(train_u_indices, train_v_indices, train_labels))
-        g_list.extend(core(test_u_indices, test_v_indices, test_labels))
+    g_list.extend(core(train_u_indices, train_v_indices, train_labels))
+    g_list.extend(core(test_u_indices, test_v_indices, test_labels))
 
     logger.info(f"No. graphs created: {len(g_list)}")
 
@@ -407,7 +385,7 @@ def create_data(
     permuted_graphs = []
     if not parallel:
         for g in tqdm(g_list, desc="Create permuted graphs"):
-            permuted_graphs += create_permuted_graphs(g, n_perm_graphs, args.pe_dim)
+            permuted_graphs += create_permuted_graphs(g, args.n_perm_graphs, args.pe_dim)
     else:
 
         def f_create(data_list, queue, n, pos_enc_dim):
@@ -423,8 +401,8 @@ def create_data(
             num_workers,
             None,
             True,
-            len(g_list) * 5,  # Nếu đúng thì chỗ này phải nhân với n_perm_graphs
-            n_perm_graphs,
+            len(g_list) * args.n_perm_graphs,  # Nếu đúng thì chỗ này phải nhân với n_perm_graphs
+            args.n_perm_graphs,
             args.pe_dim,
         ).launch()
 

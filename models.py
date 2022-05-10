@@ -1,3 +1,4 @@
+from torch_geometric.nn import RGCNConv
 from torch_geometric.utils import dropout_adj
 
 from all_packages import *
@@ -5,7 +6,6 @@ from hypermixer import HyperMixerLayer
 from layers import *
 from regularization.mlp import MLP
 from util_functions import *
-from torch_geometric.nn import RGCNConv
 
 
 class IGMC(GNN):
@@ -33,10 +33,8 @@ class IGMC(GNN):
     ):
         # gconv = GatedGCNLayer GatedGCNLSPELayer RGatedGCNLayer RGCNConv
         if scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
-            # gconv = RGCNConvLSPE GatedGCNLSPELayer
-            # TODO: Em thay gcon dưới đây bằng RGCNConv của pyg và GatedGCNLayer trong file layers.py
-            gconv = NewFastRGCNConv
-            # gconv = RGCNConv
+            # gconv = RGCNConvLSPE GatedGCNLSPELayer NewFastRGCNConv OldRGCNConvLSPE
+            gconv = OldRGCNConvLSPE
         elif scenario in [9, 10, 11, 12, 13, 14, 15, 16]:
             gconv = GatedGCNLayer
         else:
@@ -87,24 +85,24 @@ class IGMC(GNN):
         #     nn.TransformerEncoderLayer(d_model=4, nhead=2), 4
         # )
         self.hyper_mixer = nn.Sequential(*[HyperMixerLayer(N=420, hid_dim=4) for _ in range(4)])
-        self.mlp_contrastive = MLP(self.node_feat_dim, dropout=dropout)
+        self.mlp_contrastive = MLP(pe_dim, dropout=dropout)
 
         if scenario in [1, 2, 3, 4, 9, 10, 11, 12]:
-            # self.lin1 = nn.Linear(2 * sum(latent_dim), 128)
-            self.lin1 = nn.Identity(128)
-            self.lin2 = nn.Linear(256, 128)
+            final_dim = 2 * sum(latent_dim)
         elif scenario in [5, 6, 7, 8, 13, 14, 15, 16]:
-            # self.lin1 = nn.Linear(4 * sum(latent_dim), 128)
-            self.lin1 = nn.Identity(128)
-            self.lin2 = nn.Linear(256, 128)
+            final_dim = 4 * sum(latent_dim)
 
         else:
             raise NotImplementedError()
+        self.final_ff = nn.Sequential(
+            nn.Linear(final_dim, final_dim),
+            # TODO: Perhaps change the following to Tanh
+            nn.ReLU(),
+            nn.Dropout(0.5),
+            nn.Linear(final_dim, 1),
+        )
 
         self.side_features = side_features
-        if side_features:
-            # self.lin1 = nn.Linear(2 * sum(latent_dim) + n_side_features, 128)
-            self.lin1 = nn.Linear(128 + n_side_features, 128)
 
         self.graphsizenorm = GraphSizeNorm()
 
@@ -112,11 +110,11 @@ class IGMC(GNN):
         self.initialize_weights()
 
         ## Load weights of Contrastive MLP layer
-        # FIXME: Khi mọi thứ đã oke, enable các dòng bên dưới
-        # if path_weight_mlp is None or not osp.isfile(path_weight_mlp):
-        #     logger.error(f"Path to Contrastive MLP weights error: {path_weight_mlp}")
-        #     sys.exit(1)
-        # self.mlp_contrastive.load_state_dict(torch.load(path_weight_mlp))
+        if path_weight_mlp is None or not osp.isfile(path_weight_mlp):
+            logger.error(f"Path to Contrastive MLP weights error: {path_weight_mlp}")
+            sys.exit(1)
+        logger.info("Loading weights from trained MLP")
+        self.mlp_contrastive.load_state_dict(torch.load(path_weight_mlp, map_location="cpu"))
         for param in self.mlp_contrastive.parameters():
             param.requires_grad = False
 
@@ -184,8 +182,10 @@ class IGMC(GNN):
             node_subgraph_feat = hyper_mixer(node_subgraph_feat, batch)
 
         ## Convert node feat, pe to suitable dim before passing thu GNN layers
-        pe = self.lin_pe(pe)
-        x = self.mlp_contrastive(node_subgraph_feat)
+        pe = self.lin_pe(self.mlp_contrastive(pe))
+        x = node_subgraph_feat
+        # NOTE: If using PE as node_feat, enable the following
+        # x = pe
 
         if self.scenario in [9, 10, 11, 12, 13, 14, 15, 16]:
             edge_type = edge_type.unsqueeze(-1).float()
@@ -199,20 +199,23 @@ class IGMC(GNN):
         ## Pass node feat thru GNN layers
         concat_states = []
         for conv in self.convs:
-            ## TODO: Em sửa cái input của conv cho phù hợp
             if self.scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
-                pe = conv(pe, edge_index, edge_type)
+                # NOTE: If using PE as node_feat, enable the following
+                # x = conv(x, edge_index, edge_type)
+                x, pe = conv(x, pe, edge_index, edge_type)
             elif self.scenario in [9, 10, 11, 12, 13, 14, 15, 16]:
-                pe, edge_embd = conv(pe, edge_embd, edge_index)
+                # NOTE: If using PE as node_feat, enable the following
+                # x, edge_embd = conv(x, edge_embd, edge_index)
+                x, edge_embd, pe = conv(x, edge_embd, edge_index, pe)
             else:
                 raise NotImplementedError()
 
-            ## TODO: Em bỏ cái phần concatenate x và pe đi nhé
             if self.scenario in [5, 6, 7, 8, 13, 14, 15, 16]:
-                # concat_states.append(torch.cat((x, pe), dim=-1))
-                concat_states.append(pe)
+                # NOTE: If using PE as node_feat, enable the following
+                # concat_states.append(x)
+                concat_states.append(torch.cat((x, pe), dim=-1))
             elif self.scenario in [1, 2, 3, 4, 9, 10, 11, 12]:
-                concat_states.append(pe)
+                concat_states.append(x)
             else:
                 raise NotImplementedError()
 
@@ -224,9 +227,7 @@ class IGMC(GNN):
         if self.side_features:
             x = torch.cat([x, data.u_feature, data.v_feature], 1)
 
-        x = F.relu(self.lin1(x))
-        x = F.dropout(x, p=0.5, training=self.training)
-        x = self.lin2(x)
+        x = self.final_ff(x)
         if self.regression:
             return x[:, 0] * self.multiply_by
         else:

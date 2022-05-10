@@ -459,7 +459,8 @@ else:
         pe_dim=args.pe_dim,
         n_nodes=n_nodes,
         class_values=class_values,
-        scenario=args.scenario
+        scenario=args.scenario,
+        path_weight_mlp="weights/mlp_yahoo_music_40.pt" if args.scenario % 2 == 1 else "weights/mlp_yahoo_music_140.pt"
     )
     total_params = sum(p.numel() for param in model.parameters() for p in param)
     print(f'Total number of parameters is {total_params}')

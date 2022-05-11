@@ -7,7 +7,7 @@ def collate_fn(batch):
     # trg: list of [n*, n*]
 
     device, dtype = x[0].device, x[0].dtype
-    n_max = max([_.shape[0] for _ in x])
+    n_max = 420  # maximum number of nodes
     d = x[0].size(-1)
 
     X, trgs, mask = [], None, []

@@ -254,7 +254,7 @@ if args.transfer == '':
 else:
     args.model_pos = os.path.join(args.transfer, 'model_checkpoint{}.pth'.format(args.epochs))
 if not os.path.exists(args.res_dir):
-    os.makedirs(args.res_dir) 
+    os.makedirs(args.res_dir, exist_ok=True) 
 
 if not args.keep_old and not args.transfer:
     # backup current main.py, model.py files

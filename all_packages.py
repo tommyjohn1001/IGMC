@@ -14,6 +14,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 import dotenv
+import numpy as np
 import pytorch_lightning as plt
 import torch
 import torch.nn as nn

@@ -35,17 +35,18 @@
 #         --dynamic-train\
 #         --no-train\
 
-python bot.py --scenario 1 -g 0 & python bot.py --scenario 2 -g 1
-python bot.py --scenario 3 -g 0 & python bot.py --scenario 4 -g 1
-python bot.py --scenario 5 -g 0 & python bot.py --scenario 6 -g 1
-python bot.py --scenario 7 -g 0 & python bot.py --scenario 8 -g 1
+# python bot.py --scenario 1 -g 0 & python bot.py --scenario 2 -g 1
+# python bot.py --scenario 3 -g 0 & python bot.py --scenario 4 -g 1
+# python bot.py --scenario 5 -g 0 & python bot.py --scenario 6 -g 1
+# python bot.py --scenario 7 -g 0 & python bot.py --scenario 8 -g 1
 
 ###################
 ## 1. Run script for training Regularization trick
 ###################
+# python -m regularization.train --dataset yahoo_music --pe_dim 40 -g 0 --n_perm_graphs 6 &\
 # python -m regularization.train --dataset yahoo_music --pe_dim 140 -g 2 --n_perm_graphs 6
 
-# python bot.py --scenario 1 -g 2 & python bot.py --scenario 2 -g 1
-# python bot.py --scenario 3 -g 2 & python bot.py --scenario 4 -g 1
-# python bot.py --scenario 5 -g 2 & python bot.py --scenario 6 -g 1
-# python bot.py --scenario 7 -g 2 & python bot.py --scenario 8 -g 1
+python bot.py --scenario 1 -g 2 & python bot.py --scenario 2 -g 1
+python bot.py --scenario 3 -g 2 & python bot.py --scenario 4 -g 1
+python bot.py --scenario 5 -g 2 & python bot.py --scenario 6 -g 1
+python bot.py --scenario 7 -g 2 & python bot.py --scenario 8 -g 1

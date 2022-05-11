@@ -112,12 +112,22 @@ class ContrastiveModel(nn.Module):
         self.ConDistance = ContrastiveDistance(tau=tau, eps=eps, metric=metric)
         self.mlp = MLP(d=d_pe, dropout=dropout)
         self.criterion_mse = nn.MSELoss()
+        self.rot_matrices = nn.ParameterList()
 
-    def create_rotation_matrix(self, batch_size, n_max, device, dtype) -> Tensor:
-        rot_matrix = [
-            torch.from_numpy(ortho_group.rvs(n_max)).to(device=device, dtype=dtype)
-            for _ in range(batch_size)
-        ]
+        self.create_rotation_matrix()
+
+    def create_rotation_matrix(self, n_max=420):
+        for _ in range(50):
+            rot_matrix = torch.from_numpy(ortho_group.rvs(n_max))
+            rot_matrix = nn.Parameter(rot_matrix)
+            rot_matrix.requires_grad = False
+
+            self.rot_matrices.append(rot_matrix)
+
+    def get_rotation_matrix(self, batch_size) -> Tensor:
+        indices = [random.randint(0, 49) for _ in range(batch_size)]
+        rot_matrix = [self.rot_matrices[i] for i in indices]
+
         rot_matrix = torch.stack(rot_matrix)
         # [bz, n_max, n_max]
 
@@ -128,9 +138,6 @@ class ContrastiveModel(nn.Module):
         # mask: [bz]
         # trgs: [N, N]
 
-        bz, n_max, _ = X.shape
-        device, dtype = X.device, X.dtype
-
         bz = X.size(0)
 
         ## 1. Apply MLP
@@ -138,10 +145,10 @@ class ContrastiveModel(nn.Module):
         # [bz, n_max, d]
 
         ## NOTE: An experiment that rotates node embds with randomly initialized rotation matrix
-        Q = self.create_rotation_matrix(bz, n_max, device, dtype)
+        Q = self.get_rotation_matrix(bz)
 
         ## Rotate node feat
-        X = Q @ X
+        X = Q.to(dtype=X.dtype) @ X
         # [bz, n_max, d]
 
         ## 2. Calculate distace matrix L_hat

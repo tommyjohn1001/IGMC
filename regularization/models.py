@@ -1,4 +1,5 @@
 from all_packages import *
+from scipy.stats import ortho_group
 from torch.optim.adamw import AdamW
 from torch.optim.lr_scheduler import LambdaLR
 
@@ -112,15 +113,35 @@ class ContrastiveModel(nn.Module):
         self.mlp = MLP(d=d_pe, dropout=dropout)
         self.criterion_mse = nn.MSELoss()
 
+    def create_rotation_matrix(self, batch_size, n_max, device, dtype) -> Tensor:
+        rot_matrix = [
+            torch.from_numpy(ortho_group.rvs(n_max)).to(device=device, dtype=dtype)
+            for _ in range(batch_size)
+        ]
+        rot_matrix = torch.stack(rot_matrix)
+        # [bz, n_max, n_max]
+
+        return rot_matrix
+
     def forward(self, X: Tensor, trgs: Tensor, mask: Tensor):
         # X: [bz, n_max, d]
         # mask: [bz]
         # trgs: [N, N]
 
+        bz, n_max, _ = X.shape
+        device, dtype = X.device, X.dtype
+
         bz = X.size(0)
 
         ## 1. Apply MLP
         X = self.mlp(X)
+        # [bz, n_max, d]
+
+        ## NOTE: An experiment that rotates node embds with randomly initialized rotation matrix
+        Q = self.create_rotation_matrix(bz, n_max, device, dtype)
+
+        ## Rotate node feat
+        X = Q @ X
         # [bz, n_max, d]
 
         ## 2. Calculate distace matrix L_hat

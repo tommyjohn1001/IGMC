@@ -1,5 +1,3 @@
-from re import L
-
 from all_packages import *
 
 from regularization.create_data import create_data
@@ -15,13 +13,27 @@ def train():
     path_dir_weights = args.path_dir_mlp_weights
     if not osp.isdir(path_dir_weights):
         os.makedirs(path_dir_weights, exist_ok=True)
-    path_mlp_weights = osp.join(path_dir_weights, f"mlp_{args.dataset}_{args.pe_dim}.pt")
+    path_mlp_weights = osp.join(
+        path_dir_weights, f"mlp_{args.dataset}_{args.pe_dim}_{args.metric}.pt"
+    )
 
     ## Create data if not available
-    if not osp.isfile(path_mlp_weights):
+    path_train_dataset = (
+        f"regularization/data/train_dataset_{args.dataset}_{args.pe_dim}_{args.metric}.pkl"
+    )
+    path_val_dataset = (
+        f"regularization/data/val_dataset_{args.dataset}_{args.pe_dim}_{args.metric}.pkl"
+    )
+    if not osp.isfile(path_train_dataset):
         logger.info("Data not created. Creating...")
 
-    create_data(args, num_workers=12)
+        data_train, data_val = create_data(args, num_workers=12)
+
+        # Save datasets
+        os.makedirs(osp.dirname(path_train_dataset))
+
+        torch.save(data_train, path_train_dataset)
+        torch.save(data_val, path_val_dataset)
 
     ## Create model, Trainer
     logger.info("Start training")

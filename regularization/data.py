@@ -31,17 +31,16 @@ def collate_fn(batch):
 
 
 class ContrasLearnDataset(Dataset):
-    def __init__(self, path_dir_dataset, split) -> None:
+    def __init__(self, path_dataset) -> None:
         super().__init__()
 
         self.dataset = None
 
-        self.load_dataset(path_dir_dataset, split)
+        self.load_dataset(path_dataset)
 
-    def load_dataset(self, path_dir_dataset, split):
-        path_dataset = osp.join(path_dir_dataset, f"{split}_dataset.pkl")
+    def load_dataset(self, path_dataset):
         if not osp.isfile(path_dataset):
-            logger.error(f"Path to dataset {split} invalid: {path_dataset}")
+            logger.error(f"Path to dataset invalid: {path_dataset}")
             sys.exit(1)
 
         self.dataset = torch.load(path_dataset)
@@ -54,22 +53,20 @@ class ContrasLearnDataset(Dataset):
 
 
 class ContrasLearnLitData(plt.LightningDataModule):
-    def __init__(self, path_dir_dataset, batch_size=50):
+    def __init__(self, path_train_dataset, path_val_dataset, batch_size=50):
         super().__init__()
 
-        self.path_dir_dataset = path_dir_dataset
+        self.path_train_dataset = path_train_dataset
+        self.path_val_dataset = path_val_dataset
         self.batch_size = batch_size
 
         self.data_train, self.data_val = None, None
 
     def setup(self, stage):
         """Load data. Set variables: self.data_train, self.data_val, self.data_test."""
-        if not osp.isdir(self.path_dir_dataset):
-            logger.error(f"Path to dir containing dataset incorrect: {self.path_dir_dataset}")
-            sys.exit(1)
 
-        self.data_train = ContrasLearnDataset(self.path_dir_dataset, "train")
-        self.data_val = ContrasLearnDataset(self.path_dir_dataset, "val")
+        self.data_train = ContrasLearnDataset(self.path_train_dataset)
+        self.data_val = ContrasLearnDataset(self.path_val_dataset)
 
     def train_dataloader(self):
         """Return DataLoader for training."""

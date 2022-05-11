@@ -100,6 +100,7 @@ def logger(info, model, optimizer, testing=True):
 parser = argparse.ArgumentParser(description='Inductive Graph-based Matrix Completion')
 # general settings
 parser.add_argument("--scenario", type=int, default=1)
+parser.add_argument("--path_weight_mlp", type=str, default=None)
 parser.add_argument("--wandb", action="store_true")
 parser.add_argument('--testing', action='store_true', default=False,
                     help='if set, use testing mode which splits all ratings into train/test;\
@@ -451,16 +452,16 @@ else:
         num_relations=num_relations, 
         num_bases=4, 
         regression=True, 
-        adj_dropout=args.adj_dropout, 
-        force_undirected=args.force_undirected, 
-        side_features=args.use_features, 
-        n_side_features=n_features, 
+        adj_dropout=args.adj_dropout,
+        force_undirected=args.force_undirected,
+        side_features=args.use_features,
+        n_side_features=n_features,
         multiply_by=multiply_by,
         pe_dim=args.pe_dim,
         n_nodes=n_nodes,
         class_values=class_values,
         scenario=args.scenario,
-        path_weight_mlp="weights/mlp_yahoo_music_40.pt" if args.scenario % 2 == 1 else "weights/mlp_yahoo_music_140.pt"
+        path_weight_mlp=args.path_weight_mlp
     )
     total_params = sum(p.numel() for param in model.parameters() for p in param)
     print(f'Total number of parameters is {total_params}')

@@ -36,7 +36,7 @@ class IGMC(GNN):
             # gconv = RGCNConvLSPE GatedGCNLSPELayer NewFastRGCNConv OldRGCNConvLSPE
             gconv = OldRGCNConvLSPE
         elif scenario in [9, 10, 11, 12, 13, 14, 15, 16]:
-            gconv = GatedGCNLayer
+            gconv = GatedGCNLSPELayer
         else:
             raise NotImplementedError()
 
@@ -81,10 +81,10 @@ class IGMC(GNN):
                 self.convs.append(gconv(latent_dim[i], latent_dim[i + 1]))
 
         ## NOTE: Temporarily disabled
-        # self.trans_encoder = nn.TransformerEncoder(
-        #     nn.TransformerEncoderLayer(d_model=4, nhead=2), 4
-        # )
-        self.hyper_mixer = nn.Sequential(*[HyperMixerLayer(N=420, hid_dim=4) for _ in range(4)])
+        self.trans_encoder = nn.TransformerEncoder(
+            nn.TransformerEncoderLayer(d_model=4, nhead=2), 4
+        )
+        # self.hyper_mixer = nn.Sequential(*[HyperMixerLayer(N=420, hid_dim=4) for _ in range(4)])
         self.mlp_contrastive = MLP(pe_dim, dropout=dropout)
 
         if scenario in [1, 2, 3, 4, 9, 10, 11, 12]:
@@ -94,10 +94,12 @@ class IGMC(GNN):
 
         else:
             raise NotImplementedError()
+
+        ## NOTE: If using PE as node feat, enable the following
+        # final_dim = 2 * sum(latent_dim)
         self.final_ff = nn.Sequential(
             nn.Linear(final_dim, final_dim),
-            # TODO: Perhaps change the following to Tanh
-            nn.ReLU(),
+            nn.GELU(),
             nn.Dropout(0.5),
             nn.Linear(final_dim, 1),
         )
@@ -176,10 +178,10 @@ class IGMC(GNN):
         )
 
         # NOTE: If use TransEncoder, use the following, otherwise use the next
-        # mask = self.create_trans_mask(batch, x.dtype, x.device)
-        # node_subgraph_feat = self.trans_encoder(node_subgraph_feat.unsqueeze(1), mask).squeeze(1)
-        for hyper_mixer in self.hyper_mixer:
-            node_subgraph_feat = hyper_mixer(node_subgraph_feat, batch)
+        mask = self.create_trans_mask(batch, x.dtype, x.device)
+        node_subgraph_feat = self.trans_encoder(node_subgraph_feat.unsqueeze(1), mask).squeeze(1)
+        # for hyper_mixer in self.hyper_mixer:
+        #     node_subgraph_feat = hyper_mixer(node_subgraph_feat, batch)
 
         ## Convert node feat, pe to suitable dim before passing thu GNN layers
         pe = self.lin_pe(self.mlp_contrastive(pe))
@@ -193,7 +195,7 @@ class IGMC(GNN):
             x = self.lin_x(x)
 
         ## Apply graph size norm
-        if self.scenario in [3, 4, 11, 12, 15, 16]:
+        if self.scenario in [3, 4, 7, 8, 11, 12, 15, 16]:
             x = self.graphsizenorm(x, batch)
 
         ## Pass node feat thru GNN layers

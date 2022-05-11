@@ -35,11 +35,12 @@ def get_linear_schedule_with_warmup(optimizer, num_warmup_epochs, num_train_epoc
 
 
 class ContrastiveDistance(nn.Module):
-    def __init__(self, tau=0.07, eps=1e-8):
+    def __init__(self, tau=0.07, eps=1e-8, metric="L1"):
         super().__init__()
 
         self.tau = tau
         self.eps = eps
+        self.metric = metric
 
     def get_sim_matrix(self, a, b, eps=1e-8):
         """
@@ -48,10 +49,19 @@ class ContrastiveDistance(nn.Module):
         # a, b: [bz, n_max, d]
 
         a_n, b_n = a.norm(dim=-1, keepdim=True), b.norm(dim=-1, keepdim=True)
-        a_norm = a / torch.clamp(a_n, min=eps)
-        b_norm = b / torch.clamp(b_n, min=eps)
-        sim_mt = torch.bmm(a_norm, b_norm.transpose(1, 2))
-        # [bz, n_max, n_max]
+
+        if self.metric == "cosine":
+            a_norm = a / torch.clamp(a_n, min=eps)
+            b_norm = b / torch.clamp(b_n, min=eps)
+            sim_mt = torch.bmm(a_norm, b_norm.transpose(1, 2))
+        elif self.metric == "L1":
+            sim_mt = torch.cdist(a_n, b_n, p=1)
+        elif self.metric == "L2":
+            sim_mt = torch.cdist(a_n, b_n, p=2)
+        else:
+            raise NotImplementedError()
+
+        # sim_mt: [bz, n_max, n_max]
 
         return sim_mt
 
@@ -95,10 +105,10 @@ class ContrastiveDistance(nn.Module):
 
 
 class ContrastiveModel(nn.Module):
-    def __init__(self, d_pe, tau=0.07, eps=1e-8, dropout=0.25):
+    def __init__(self, d_pe, tau=0.07, eps=1e-8, dropout=0.25, metric="L1"):
         super().__init__()
 
-        self.ConDistance = ContrastiveDistance(tau=tau, eps=eps)
+        self.ConDistance = ContrastiveDistance(tau=tau, eps=eps, metric=metric)
         self.mlp = MLP(d=d_pe, dropout=dropout)
         self.criterion_mse = nn.MSELoss()
 
@@ -144,6 +154,7 @@ class ContrasLearnLitModel(plt.LightningModule):
         tau=0.07,
         eps=1e-8,
         dropout=0.25,
+        metric="L1",
         weight_decay=1e-2,
         lr=5e-4,
         num_warmup_epochs=10,
@@ -164,7 +175,7 @@ class ContrasLearnLitModel(plt.LightningModule):
         }
         self.save_hyperparameters()
 
-        self.model = ContrastiveModel(d_pe=d_pe, tau=tau, eps=eps, dropout=dropout)
+        self.model = ContrastiveModel(d_pe=d_pe, tau=tau, eps=eps, dropout=dropout, metric=metric)
 
     def training_step(self, batch: Any, batch_idx: int):
         loss_mse = self.model(*batch)

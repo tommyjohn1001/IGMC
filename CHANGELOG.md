@@ -1,3 +1,9 @@
+## May 11 | 11:40
+
+- Add 2 other metrics to Contrastive Learning: L1 and L2
+- Add learning scheduler into training IGMC, change lr
+- Replace some configs in training both Contrastive and IGMC
+
 ## May 10 | 10:33
 
 - Fix error in creating data for training Regularization trick

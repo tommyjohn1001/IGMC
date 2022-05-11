@@ -413,10 +413,4 @@ def create_data(
     n_train_samples = int(train_ratio * len(permuted_graphs))
     data_train, data_val = permuted_graphs[:n_train_samples], permuted_graphs[n_train_samples:]
 
-    ## Save datasets
-    os.makedirs(args.path_dir_dataset)
-    path_data_train = osp.join(args.path_dir_dataset, "train_dataset.pkl")
-    path_data_val = osp.join(args.path_dir_dataset, "val_dataset.pkl")
-
-    torch.save(data_train, path_data_train)
-    torch.save(data_val, path_data_val)
+    return data_train, data_val

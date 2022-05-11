@@ -18,6 +18,12 @@ def get_args():
     parser.add_argument("--path_dir_mlp_weights", type=str, default="weights")
     parser.add_argument("--dataset", type=str, default="yahoo_music")
 
+    parser.add_argument(
+        "--metric",
+        type=str,
+        default="L1",
+        choices=["cosine", "L1", "L2"],
+    )
     parser.add_argument("--hop", type=int, default=1)
     parser.add_argument("--sample-ratio", type=float, default=1.0)
     parser.add_argument("--max-nodes-per-hop", default=10000)
@@ -49,6 +55,7 @@ def get_litmodel(args):
         tau=args.tau,
         eps=args.eps,
         dropout=args.dropout,
+        metric=args.metric,
         weight_decay=args.weight_decay,
         lr=args.lr,
         num_warmup_epochs=args.num_warmup_epochs,
@@ -105,6 +112,13 @@ def get_trainer(args):
 
 
 def get_litdata(args):
-    litdata = ContrasLearnLitData(args.path_dir_dataset, batch_size=args.batch_size)
+    path_train_dataset = (
+        f"regularization/data/train_dataset_{args.dataset}_{args.pe_dim}_{args.metric}.pkl"
+    )
+    path_val_dataset = (
+        f"regularization/data/val_dataset_{args.dataset}_{args.pe_dim}_{args.metric}.pkl"
+    )
+
+    litdata = ContrasLearnLitData(path_train_dataset, path_val_dataset, batch_size=args.batch_size)
 
     return litdata

@@ -113,10 +113,10 @@ def get_trainer(args):
 
 def get_litdata(args):
     path_train_dataset = (
-        f"regularization/data/train_dataset_{args.dataset}_{args.pe_dim}_{args.metric}.pkl"
+        f"regularization/data/train_dataset_{args.dataset}_{args.pe_dim}_{args.metric}_rotate.pkl"
     )
     path_val_dataset = (
-        f"regularization/data/val_dataset_{args.dataset}_{args.pe_dim}_{args.metric}.pkl"
+        f"regularization/data/val_dataset_{args.dataset}_{args.pe_dim}_{args.metric}_rotate.pkl"
     )
 
     litdata = ContrasLearnLitData(path_train_dataset, path_val_dataset, batch_size=args.batch_size)

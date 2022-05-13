@@ -4,7 +4,7 @@ import random
 from datetime import datetime, timedelta
 
 PE_DIMS = {"common": 40, "yahoo_music": 140, "douban": 115, "flixster": 86, "ml_100k": 80}
-TIMES = 1
+TIMES = 2
 
 
 def flix_dou_yah(dataset, pe_dim, scenario, cuda_device, ith, metric):
@@ -24,8 +24,8 @@ def flix_dou_yah(dataset, pe_dim, scenario, cuda_device, ith, metric):
             --lr 0.0008\
             --seed {SEED}\
             --pe-dim {pe_dim}\
-            --scenario {scenario} > logs/{dataset}_{scenario}_{ith}_{pe_dim}_{now}.log\
-            --path_weight_mlp {path_weight_mlp}"
+            --scenario {scenario}\
+            --path_weight_mlp {path_weight_mlp} > logs/{dataset}_{metric}_{scenario}_{ith}_{pe_dim}_{now}.log"
     )
 
 
@@ -48,8 +48,8 @@ def movielens(pe_dim, scenario, cuda_device, ith, batch_size, metric):
             --batch-size {batch_size}\
             --seed {SEED}\
             --pe-dim {pe_dim}\
-            --scenario {scenario} > logs/{dataset}_{scenario}_{ith}_{pe_dim}_{now}.log\
-            --path_weight_mlp {path_weight_mlp}"
+            --scenario {scenario}\
+            --path_weight_mlp {path_weight_mlp} > logs/{dataset}_{scenario}_{ith}_{pe_dim}_{now}.log"
     )
 
 

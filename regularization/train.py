@@ -30,7 +30,7 @@ def train():
         data_train, data_val = create_data(args, num_workers=12)
 
         # Save datasets
-        os.makedirs(osp.dirname(path_train_dataset))
+        os.makedirs(osp.dirname(path_train_dataset), exist_ok=True)
 
         torch.save(data_train, path_train_dataset)
         torch.save(data_val, path_val_dataset)

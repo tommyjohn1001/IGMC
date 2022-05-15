@@ -1,3 +1,9 @@
+## May 15 | 9:59
+
+- Add some configurations facilitating training
+- Modify some settings
+- Remove some redundancies
+
 ## May 11 | 11:40
 
 - Add 2 other metrics to Contrastive Learning: L1 and L2

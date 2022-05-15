@@ -1,5 +1,6 @@
 import argparse
 import os
+import os.path as osp
 import random
 from datetime import datetime, timedelta
 
@@ -7,12 +8,14 @@ PE_DIMS = {"common": 40, "yahoo_music": 140, "douban": 115, "flixster": 86, "ml_
 TIMES = 2
 
 
-def flix_dou_yah(dataset, pe_dim, scenario, cuda_device, ith, metric):
+def flix_dou_yah(dataset, pe_dim, scenario, cuda_device, ith, metric, mixer):
     now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H:%M")
     SEED = random.randint(0, 20)
     epoch = 40
 
     path_weight_mlp = f"weights/mlp_{dataset}_{pe_dim}_{metric}_rotate.pt"
+    path_log = f"logs/{mixer}/{metric}/{dataset}_rotate_{scenario}_{ith}_{pe_dim}_{now}.log"
+    os.makedirs(osp.dirname(path_log), exist_ok=True)
 
     os.system(
         f"CUDA_VISIBLE_DEVICES={cuda_device} python Main.py\
@@ -25,7 +28,7 @@ def flix_dou_yah(dataset, pe_dim, scenario, cuda_device, ith, metric):
             --seed {SEED}\
             --pe-dim {pe_dim}\
             --scenario {scenario}\
-            --path_weight_mlp {path_weight_mlp} > logs/{dataset}_rotate_{scenario}_{ith}_{pe_dim}_{now}.log"
+            --path_weight_mlp {path_weight_mlp} > {path_log}"
     )
 
 
@@ -59,17 +62,21 @@ if __name__ == "__main__":
     parser.add_argument("--gpu", "-g", type=int)
     parser.add_argument(
         "--metric",
-        "-m",
         type=str,
         default="L1",
         choices=["cosine", "L1", "L2"],
     )
+    parser.add_argument(
+        "--mixer", type=str, default="trans_encoder", choices=["hyper_mixer", "trans_encoder"]
+    )
+    parser.add_argument("--dataset", type=str, default="flix_yah", choices=["flix_yah", "douban"])
 
     args = parser.parse_args()
 
     cuda_device = args.gpu
+    datasets = ["flixster", "yahoo_music"] if args.dataset == "flix_yah" else ["douban"]
 
-    for dataset in ["yahoo_music"]:  # "ml_100k" "yahoo_music", "flixster", "douban"
+    for dataset in datasets:  # "ml_100k" "yahoo_music", "flixster", "douban"
         for ith in range(TIMES):
             if args.scenario % 2 == 1:
                 pe_dim = PE_DIMS["common"]
@@ -80,4 +87,6 @@ if __name__ == "__main__":
             if dataset == "ml_100k":
                 movielens(pe_dim, args.scenario, cuda_device, ith, 30, args.metric)
             else:
-                flix_dou_yah(dataset, pe_dim, args.scenario, cuda_device, ith, args.metric)
+                flix_dou_yah(
+                    dataset, pe_dim, args.scenario, cuda_device, ith, args.metric, args.mixer
+                )

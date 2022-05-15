@@ -379,7 +379,7 @@ def create_data(
     g_list.extend(core(train_u_indices, train_v_indices, train_labels))
     g_list.extend(core(test_u_indices, test_v_indices, test_labels))
 
-    g_list = g_list[:30000]
+    g_list = g_list[:12000]
 
     logger.info(f"No. graphs created: {len(g_list)}")
 

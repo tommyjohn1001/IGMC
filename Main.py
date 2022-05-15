@@ -13,12 +13,10 @@ from datetime import datetime, timedelta
 from glob import glob
 from shutil import copy, copytree, rmtree
 
-import dotenv
 import numpy as np
 import scipy.io as sio
 import scipy.sparse as ssp
 import torch
-import wandb
 from loguru import logger as logu
 
 from data_utils import *
@@ -26,8 +24,6 @@ from models import *
 from preprocessing import *
 from train_eval import *
 from util_functions import *
-
-dotenv.load_dotenv(override=True)
 
 # used to traceback which code cause warnings, can delete
 def warn_with_traceback(message, category, filename, lineno, file=None, line=None):
@@ -93,15 +89,13 @@ def logger(info, model, optimizer, testing=True):
                 args.res_dir, 'optimizer_checkpoint{}.pth'.format(epoch)
             )
             best.add(info['test_rmse'], model, model_name)
-    
-
 
 # Arguments
 parser = argparse.ArgumentParser(description='Inductive Graph-based Matrix Completion')
 # general settings
 parser.add_argument("--scenario", type=int, default=1)
+parser.add_argument("--mixer", type=str, default="trans_encoder", choices=['hyper_mixer', 'trans_encoder'])
 parser.add_argument("--path_weight_mlp", type=str, default=None)
-parser.add_argument("--wandb", action="store_true")
 parser.add_argument('--testing', action='store_true', default=False,
                     help='if set, use testing mode which splits all ratings into train/test;\
                     otherwise, use validation model which splits all ratings into \
@@ -461,22 +455,12 @@ else:
         n_nodes=n_nodes,
         class_values=class_values,
         scenario=args.scenario,
-        path_weight_mlp=args.path_weight_mlp
+        path_weight_mlp=args.path_weight_mlp,
+        mixer=args.mixer
+
     )
     total_params = sum(p.numel() for param in model.parameters() for p in param)
     print(f'Total number of parameters is {total_params}')
-    
-## Init wandb logger
-if args.wandb:
-    wandb.login()
-    now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H:%M:%S")
-    appdx = f"{args.data_appendix}"
-    if args.save_appendix != '':
-        appdx += f"{args.save_appendix.replace(f'_{args.pe_dim}', '')}"
-    name = f"{args.data_name}_{now}{appdx}"
-    wandb.init(project="IGMC", name=name, config=args)
-
-    wandb.watch(model)
 
 if not args.no_train:
     train_multiple_epochs(
@@ -499,7 +483,7 @@ if not args.no_train:
 
 
 ## Only take 4 last checkpoints
-checkpoints = sorted(glob(f"{args.res_dir}/model*.pth"))[-4:]
+checkpoints = sorted(glob(f"{args.res_dir}/model*.pth"))[-2:]
 
 if not args.ensemble:
     ## only choose best ckpt

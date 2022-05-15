@@ -30,6 +30,7 @@ class IGMC(GNN):
         scenario=1,
         dropout=0.2,
         path_weight_mlp=None,
+        mixer=None
     ):
         # gconv = GatedGCNLayer GatedGCNLSPELayer RGatedGCNLayer RGCNConv
         if scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
@@ -57,6 +58,7 @@ class IGMC(GNN):
         self.multiply_by = multiply_by
         self.scenario = scenario
         self.class_values = class_values
+        self.mixer = mixer
 
         ## Declare modules to convert node feat, pe to hidden vectors
         self.node_feat_dim = dataset.num_features - pe_dim - 1
@@ -80,12 +82,14 @@ class IGMC(GNN):
             for i in range(0, len(latent_dim) - 1):
                 self.convs.append(gconv(latent_dim[i], latent_dim[i + 1]))
 
-        ## NOTE: Temporarily disabled
-        self.trans_encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=4, nhead=2), 4
-        )
-        # self.hyper_mixer = nn.Sequential(*[HyperMixerLayer(N=420, hid_dim=4) for _ in range(4)])
-        self.mlp_contrastive = MLP(pe_dim, dropout=dropout)
+        if self.mixer == "trans_encoder":
+            self.trans_encoder = nn.TransformerEncoder(
+                nn.TransformerEncoderLayer(d_model=4, nhead=2), 4
+            )
+        elif self.mixer == "hyper_mixer":
+            self.mlp_contrastive = MLP(pe_dim, dropout=dropout)
+        else:
+            raise NotImplementedError()
 
         if scenario in [1, 2, 3, 4, 9, 10, 11, 12]:
             final_dim = 2 * sum(latent_dim)
@@ -178,10 +182,14 @@ class IGMC(GNN):
         )
 
         # NOTE: If use TransEncoder, use the following, otherwise use the next
-        mask = self.create_trans_mask(batch, x.dtype, x.device)
-        node_subgraph_feat = self.trans_encoder(node_subgraph_feat.unsqueeze(1), mask).squeeze(1)
-        # for hyper_mixer in self.hyper_mixer:
-        #     node_subgraph_feat = hyper_mixer(node_subgraph_feat, batch)
+        if self.mixer == "trans_encoder":
+            mask = self.create_trans_mask(batch, x.dtype, x.device)
+            node_subgraph_feat = self.trans_encoder(node_subgraph_feat.unsqueeze(1), mask).squeeze(1)
+        elif self.mixer == "hyper_mixer":
+            for hyper_mixer in self.hyper_mixer:
+                node_subgraph_feat = hyper_mixer(node_subgraph_feat, batch)
+        else:
+            raise NotImplementedError()
 
         ## Convert node feat, pe to suitable dim before passing thu GNN layers
         pe = self.lin_pe(self.mlp_contrastive(pe))

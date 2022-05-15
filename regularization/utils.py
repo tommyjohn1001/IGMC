@@ -1,7 +1,7 @@
 from all_packages import *
 from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
 from pytorch_lightning.callbacks.progress import TQDMProgressBar
-from pytorch_lightning.loggers import TensorBoardLogger, WandbLogger
+from pytorch_lightning.loggers import TensorBoardLogger
 
 from . import ContrasLearnLitData, ContrasLearnLitModel
 
@@ -16,7 +16,9 @@ def get_args():
     parser.add_argument("--superpod", action="store_true")
     parser.add_argument("--path_dir_dataset", type=str, default="regularization/data")
     parser.add_argument("--path_dir_mlp_weights", type=str, default="weights")
-    parser.add_argument("--dataset", type=str, default="yahoo_music")
+    parser.add_argument(
+        "--dataset", type=str, default="yahoo_music", choices=["yahoo_music", "douban", "flixster"]
+    )
 
     parser.add_argument(
         "--metric",
@@ -95,7 +97,6 @@ def get_trainer(args):
         name=name,
         version=now,
     )
-    # logger_wandb = WandbLogger(name, root_logging, project="IGMC_RegTrick")
 
     trainer = plt.Trainer(
         gpus=args.gpus,

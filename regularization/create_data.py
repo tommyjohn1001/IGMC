@@ -212,7 +212,7 @@ def create_permute_matrix(size):
     return permutation_matrix, permutation_map
 
 
-def create_trg_regu_matrix(trg_user_idx, trg_item_idx, n_nodes: int):
+def create_trg_regu_matrix(trg_user_idx, trg_item_idx, n_nodes: int, metric: str = "L1"):
     """Create target matrix for training regularization loss which is achieved by ContrastiveLoss"""
 
     trg_matrix = torch.ones((n_nodes, n_nodes))
@@ -225,10 +225,13 @@ def create_trg_regu_matrix(trg_user_idx, trg_item_idx, n_nodes: int):
             if condition1 or condition2:
                 trg_matrix[i, j] = 0
 
+    if metric in ["L1", "L2"]:
+        trg_matrix = 1 - trg_matrix
+
     return trg_matrix
 
 
-def create_permuted_graphs(data: Data, n=10, pos_enc_dim=5) -> list:
+def create_permuted_graphs(data: Data, n=10, pos_enc_dim=5, metric: str = "L1") -> list:
     if len(data.edge_index[0]) == 0:
         x_perms = torch.zeros((n, data.x.size(0) + pos_enc_dim))
         targets_perms = torch.zeros((n, 2))
@@ -254,7 +257,7 @@ def create_permuted_graphs(data: Data, n=10, pos_enc_dim=5) -> list:
         x = get_rwpe(new_A, new_D, pos_enc_dim)
 
         new_user_idx, new_item_idx = perm_map[trg_user_idx], perm_map[trg_item_idx]
-        trg = create_trg_regu_matrix(new_user_idx, new_item_idx, len(D))
+        trg = create_trg_regu_matrix(new_user_idx, new_item_idx, len(D), metric)
 
         permuted_graphs.append((x.numpy(), trg.numpy()))
 
@@ -387,12 +390,14 @@ def create_data(
     permuted_graphs = []
     if not parallel:
         for g in tqdm(g_list, desc="Create permuted graphs"):
-            permuted_graphs += create_permuted_graphs(g, args.n_perm_graphs, args.pe_dim)
+            permuted_graphs += create_permuted_graphs(
+                g, args.n_perm_graphs, args.pe_dim, args.metric
+            )
     else:
 
-        def f_create(data_list, queue, n, pos_enc_dim):
+        def f_create(data_list, queue, n, pos_enc_dim, metric):
             for data in data_list:
-                a = create_permuted_graphs(data, n, pos_enc_dim)
+                a = create_permuted_graphs(data, n, pos_enc_dim, metric)
                 for x in a:
                     queue.put(x)
 
@@ -406,6 +411,7 @@ def create_data(
             len(g_list) * args.n_perm_graphs,  # Nếu đúng thì chỗ này phải nhân với n_perm_graphs
             args.n_perm_graphs,
             args.pe_dim,
+            args.metric,
         ).launch()
 
     logger.info(f"No. permuted graphs created: {len(permuted_graphs)}")

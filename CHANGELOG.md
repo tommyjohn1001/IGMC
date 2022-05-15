@@ -1,3 +1,10 @@
+## May 15 | 12:38
+
+- Fix error in creating target L matrix for training MLP
+- Add some configurations facilitating training
+- Modify some settings
+- Remove some redundancies
+
 ## May 11 | 11:40
 
 - Add 2 other metrics to Contrastive Learning: L1 and L2

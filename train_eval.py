@@ -8,7 +8,6 @@ import networkx as nx
 import numpy as np
 import torch
 import torch.nn.functional as F
-import wandb
 from torch.optim import Adam, AdamW
 
 # from torch_geometric.data import DataLoader ## Only use if using newer pyg version
@@ -89,12 +88,8 @@ def train_multiple_epochs(
             args=args,
         )
 
-        if args.wandb:
-            wandb.log({"epoch": epoch})
         if epoch % test_freq == 0:
             test_rmse = eval_rmse(model, test_loader, device, show_progress=batch_pbar)
-            if args.wandb:
-                wandb.log({"val_loss": test_rmse})
 
             rmses.append(test_rmse)
         else:
@@ -195,9 +190,6 @@ def train(
             w = model.edge_embd.weight
             reg_loss = torch.sum((w[1:] - w[:-1]) ** 2)
         loss += ARR * reg_loss
-
-        if args.wandb and ith % 5 == 0:
-            wandb.log({"train_loss_step": loss})
 
         loss.backward()
         total_loss += loss.item() * num_graphs(data)

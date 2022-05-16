@@ -61,21 +61,21 @@ srun --container-image=/lustre/scratch/client/vinai/users/hoanglh88/utils/dc-min
      python -m regularization.train --dataset douban --pe_dim 40 -g 0 --n_perm_graphs 6 --metric L1 &\
      python -m regularization.train --dataset douban --pe_dim 115 -g 1 --n_perm_graphs 6 --metric L1
  
-     python bot2.py --scenario 9 -g 0 --metric L1 --mixer trans_encoder --dataset douban &\
-     python bot2.py --scenario 10 -g 1 --metric L1 --mixer trans_encoder --dataset douban
-     python bot2.py --scenario 11 -g 0 --metric L1 --mixer trans_encoder --dataset douban &\
-     python bot2.py --scenario 12 -g 1 --metric L1 --mixer trans_encoder --dataset douban 
-     python bot2.py --scenario 13 -g 0 --metric L1 --mixer trans_encoder --dataset douban &\
-     python bot2.py --scenario 14 -g 1 --metric L1 --mixer trans_encoder --dataset douban 
-     python bot2.py --scenario 15 -g 0 --metric L1 --mixer trans_encoder --dataset douban &\
-     python bot2.py --scenario 16 -g 1 --metric L1 --mixer trans_encoder --dataset douban
+     python bot.py --scenario 9 -g 0 --metric L1 --mixer trans_encoder --dataset douban &\
+     python bot.py --scenario 10 -g 1 --metric L1 --mixer trans_encoder --dataset douban
+     python bot.py --scenario 11 -g 0 --metric L1 --mixer trans_encoder --dataset douban &\
+     python bot.py --scenario 12 -g 1 --metric L1 --mixer trans_encoder --dataset douban 
+     python bot.py --scenario 13 -g 0 --metric L1 --mixer trans_encoder --dataset douban &\
+     python bot.py --scenario 14 -g 1 --metric L1 --mixer trans_encoder --dataset douban 
+     python bot.py --scenario 15 -g 0 --metric L1 --mixer trans_encoder --dataset douban &\
+     python bot.py --scenario 16 -g 1 --metric L1 --mixer trans_encoder --dataset douban
 
-     python bot2.py --scenario 9 -g 0 --metric L1 --mixer hyper_mixer --dataset douban &\
-     python bot2.py --scenario 10 -g 1 --metric L1 --mixer hyper_mixer --dataset douban
-     python bot2.py --scenario 11 -g 0 --metric L1 --mixer hyper_mixer --dataset douban &\
-     python bot2.py --scenario 12 -g 1 --metric L1 --mixer hyper_mixer --dataset douban 
-     python bot2.py --scenario 13 -g 0 --metric L1 --mixer hyper_mixer --dataset douban &\
-     python bot2.py --scenario 14 -g 1 --metric L1 --mixer hyper_mixer --dataset douban 
-     python bot2.py --scenario 15 -g 0 --metric L1 --mixer hyper_mixer --dataset douban &\
-     python bot2.py --scenario 16 -g 1 --metric L1 --mixer hyper_mixer --dataset douban
+     python bot.py --scenario 9 -g 0 --metric L1 --mixer hyper_mixer --dataset douban &\
+     python bot.py --scenario 10 -g 1 --metric L1 --mixer hyper_mixer --dataset douban
+     python bot.py --scenario 11 -g 0 --metric L1 --mixer hyper_mixer --dataset douban &\
+     python bot.py --scenario 12 -g 1 --metric L1 --mixer hyper_mixer --dataset douban 
+     python bot.py --scenario 13 -g 0 --metric L1 --mixer hyper_mixer --dataset douban &\
+     python bot.py --scenario 14 -g 1 --metric L1 --mixer hyper_mixer --dataset douban 
+     python bot.py --scenario 15 -g 0 --metric L1 --mixer hyper_mixer --dataset douban &\
+     python bot.py --scenario 16 -g 1 --metric L1 --mixer hyper_mixer --dataset douban
      "

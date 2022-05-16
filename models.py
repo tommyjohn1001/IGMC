@@ -29,8 +29,9 @@ class IGMC(GNN):
         class_values=None,
         scenario=1,
         dropout=0.2,
-        path_weight_mlp=None,
-        mixer=None
+        mixer=None,
+        mode=None,
+        dataname=None,
     ):
         # gconv = GatedGCNLayer GatedGCNLSPELayer RGatedGCNLayer RGCNConv
         if scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
@@ -58,7 +59,11 @@ class IGMC(GNN):
         self.multiply_by = multiply_by
         self.scenario = scenario
         self.class_values = class_values
-        self.mixer = mixer
+        self.mode = mode
+        self.gconv = gconv
+        self.side_features = side_features
+        self.dataname = dataname
+        self.pe_dim = pe_dim
 
         ## Declare modules to convert node feat, pe to hidden vectors
         self.node_feat_dim = dataset.num_features - pe_dim - 1
@@ -82,23 +87,21 @@ class IGMC(GNN):
             for i in range(0, len(latent_dim) - 1):
                 self.convs.append(gconv(latent_dim[i], latent_dim[i + 1]))
 
-        if self.mixer == "trans_encoder":
-            self.trans_encoder = nn.TransformerEncoder(
-                nn.TransformerEncoderLayer(d_model=4, nhead=2), 4
-            )
+        ## Declare Mixer: TransEncoder ; HyperMixer
+        if mixer == "trans_encoder":
+            self.mixer = nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model=4, nhead=2), 4)
         elif self.mixer == "hyper_mixer":
-            self.mlp_contrastive = MLP(pe_dim, dropout=dropout)
+            self.mixer = nn.Sequential(*[HyperMixerLayer(N=420, hid_dim=4) for _ in range(4)])
         else:
             raise NotImplementedError()
 
+        ## Define final FF
         if scenario in [1, 2, 3, 4, 9, 10, 11, 12]:
             final_dim = 2 * sum(latent_dim)
         elif scenario in [5, 6, 7, 8, 13, 14, 15, 16]:
             final_dim = 4 * sum(latent_dim)
-
         else:
             raise NotImplementedError()
-
         ## NOTE: If using PE as node feat, enable the following
         # final_dim = 2 * sum(latent_dim)
         self.final_ff = nn.Sequential(
@@ -108,21 +111,39 @@ class IGMC(GNN):
             nn.Linear(final_dim, 1),
         )
 
-        self.side_features = side_features
-
         self.graphsizenorm = GraphSizeNorm()
 
         ## init weights
         self.initialize_weights()
 
         ## Load weights of Contrastive MLP layer
-        if path_weight_mlp is None or not osp.isfile(path_weight_mlp):
-            logger.error(f"Path to Contrastive MLP weights error: {path_weight_mlp}")
-            sys.exit(1)
-        logger.info("Loading weights from trained MLP")
-        self.mlp_contrastive.load_state_dict(torch.load(path_weight_mlp, map_location="cpu"))
-        for param in self.mlp_contrastive.parameters():
-            param.requires_grad = False
+        if self.mode == "coop":
+            self.load_pretrained_weights()
+
+    def save_pretrained_weights(self):
+        """Save weights of gconv layers and mixer"""
+        path_pretrained = f"weights/{self.dataname}/{self.scenario}_{self.pe_dim}_{self.gconv.__name__}_{type(self.mixer).__name__}.pkl"
+
+        pretrained_weights = {"convs": None, "mixer": None}
+        pretrained_weights["mixer"] = self.mixer.state_dict()
+        pretrained_weights["convs"] = [conv.state_dict() for conv in self.convs]
+
+        os.makedirs(osp.dirname(path_pretrained), exist_ok=True)
+        torch.save(pretrained_weights, path_pretrained)
+
+    def load_pretrained_weights(self):
+        """Load weights of gconv layers and mixer"""
+
+        path_pretrained = f"weights/{self.dataname}/{self.scenario}_{self.pe_dim}_{self.gconv.__name__}_{type(self.mixer).__name__}.pkl"
+        if not osp.isfile(path_pretrained):
+            logger.error(f"Path to pretrained GNN and Mixer not valid: {path_pretrained}")
+            exit(1)
+
+        ## Load gconvs and mixer
+        pretrained_weights = torch.load(path_pretrained)
+        self.mixer.load_state_dict(pretrained_weights["mixer"])
+        for ith, conv in enumerate(self.convs):
+            conv.load_state_dict(pretrained_weights["convs"][ith])
 
     def initialize_weights(self):
         for m in self.modules():
@@ -181,18 +202,18 @@ class IGMC(GNN):
             x[:, self.node_feat_dim + 1 :],
         )
 
-        # NOTE: If use TransEncoder, use the following, otherwise use the next
-        if self.mixer == "trans_encoder":
+        if isinstance(self.mixer, nn.TransformerEncoder):
             mask = self.create_trans_mask(batch, x.dtype, x.device)
-            node_subgraph_feat = self.trans_encoder(node_subgraph_feat.unsqueeze(1), mask).squeeze(1)
-        elif self.mixer == "hyper_mixer":
-            for hyper_mixer in self.hyper_mixer:
-                node_subgraph_feat = hyper_mixer(node_subgraph_feat, batch)
+            node_subgraph_feat = self.mixer(node_subgraph_feat.unsqueeze(1), mask).squeeze(1)
         else:
-            raise NotImplementedError()
+            for hyper_mixer in self.mixer:
+                node_subgraph_feat = hyper_mixer(node_subgraph_feat, batch)
 
         ## Convert node feat, pe to suitable dim before passing thu GNN layers
-        pe = self.lin_pe(self.mlp_contrastive(pe))
+        if self.mode == "coop":
+            pe = self.lin_pe(self.mlp_contrastive(pe))
+        else:
+            pe = self.lin_pe(pe)
         x = node_subgraph_feat
         # NOTE: If using PE as node_feat, enable the following
         # x = pe

@@ -12,7 +12,6 @@ def get_args():
 
     parser.add_argument("--gpus", "-g", default="0")
     parser.add_argument("--ckpt", "-c", default=None)
-    parser.add_argument("--wandb", action="store_true")
     parser.add_argument("--superpod", action="store_true")
     parser.add_argument("--path_dir_dataset", type=str, default="regularization/data")
     parser.add_argument("--path_dir_mlp_weights", type=str, default="weights")

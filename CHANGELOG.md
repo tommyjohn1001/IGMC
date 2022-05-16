@@ -1,3 +1,8 @@
+## May 16 | 16:58
+
+- Implement training "pretraining" phase
+- Remove wandb and other changes
+
 ## May 15 | 12:38
 
 - Fix error in creating target L matrix for training MLP

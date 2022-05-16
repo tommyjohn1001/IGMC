@@ -2,20 +2,15 @@ import argparse
 import copy
 import math
 import os.path
-import pdb
 import random
 import re
 import sys
-import time
 import traceback
 import warnings
-from datetime import datetime, timedelta
 from glob import glob
-from shutil import copy, copytree, rmtree
+from shutil import copy, rmtree
 
 import numpy as np
-import scipy.io as sio
-import scipy.sparse as ssp
 import torch
 from loguru import logger as logu
 
@@ -33,10 +28,6 @@ def warn_with_traceback(message, category, filename, lineno, file=None, line=Non
     log.write(warnings.formatwarning(message, category, filename, lineno, line))
 
 warnings.showwarning = warn_with_traceback
-
-
-
-
 
 
 class KeepBest:
@@ -95,7 +86,7 @@ parser = argparse.ArgumentParser(description='Inductive Graph-based Matrix Compl
 # general settings
 parser.add_argument("--scenario", type=int, default=1)
 parser.add_argument("--mixer", type=str, default="trans_encoder", choices=['hyper_mixer', 'trans_encoder'])
-parser.add_argument("--path_weight_mlp", type=str, default=None)
+parser.add_argument("--mode", type=str, default="pretraining", choices=['pretraining', 'coop'])
 parser.add_argument('--testing', action='store_true', default=False,
                     help='if set, use testing mode which splits all ratings into train/test;\
                     otherwise, use validation model which splits all ratings into \
@@ -415,52 +406,36 @@ print(f'Used #train graphs: {len(train_graphs)}, #test graphs: {len(test_graphs)
 '''
     Train and apply the GNN model
 '''
-if False:
-    # DGCNN_RS GNN model
-    model = DGCNN_RS(
-        train_graphs, 
-        latent_dim=[32, 32, 32, 1], 
-        k=0.6, 
-        num_relations=len(class_values), 
-        num_bases=4, 
-        regression=True, 
-        adj_dropout=args.adj_dropout, 
-        force_undirected=args.force_undirected
-    )
-    # record the k used in sortpooling
-    if not args.transfer:
-        with open(os.path.join(args.res_dir, 'cmd_input.txt'), 'a') as f:
-            f.write(' --k ' + str(model.k) + '\n')
-            print('k is saved.')
-else:
-    # IGMC GNN model (default)
-    if args.transfer:
-        num_relations = args.num_relations
-        multiply_by = args.multiply_by
-    else:
-        num_relations = len(class_values)
-        multiply_by = 1
-    model = IGMC(
-        train_graphs, 
-        latent_dim=[32, 32, 32, 32], 
-        num_relations=num_relations, 
-        num_bases=4, 
-        regression=True, 
-        adj_dropout=args.adj_dropout,
-        force_undirected=args.force_undirected,
-        side_features=args.use_features,
-        n_side_features=n_features,
-        multiply_by=multiply_by,
-        pe_dim=args.pe_dim,
-        n_nodes=n_nodes,
-        class_values=class_values,
-        scenario=args.scenario,
-        path_weight_mlp=args.path_weight_mlp,
-        mixer=args.mixer
 
-    )
-    total_params = sum(p.numel() for param in model.parameters() for p in param)
-    print(f'Total number of parameters is {total_params}')
+# IGMC GNN model (default)
+if args.transfer:
+    num_relations = args.num_relations
+    multiply_by = args.multiply_by
+else:
+    num_relations = len(class_values)
+    multiply_by = 1
+model = IGMC(
+    train_graphs,
+    latent_dim=[32, 32, 32, 32], 
+    num_relations=num_relations, 
+    num_bases=4, 
+    regression=True, 
+    adj_dropout=args.adj_dropout,
+    force_undirected=args.force_undirected,
+    side_features=args.use_features,
+    n_side_features=n_features,
+    multiply_by=multiply_by,
+    pe_dim=args.pe_dim,
+    n_nodes=n_nodes,
+    class_values=class_values,
+    scenario=args.scenario,
+    mixer=args.mixer,
+    mode=args.mode,
+    dataname=args.data_name,
+)
+total_params = sum(p.numel() for param in model.parameters() for p in param)
+print(f'Total number of parameters is {total_params}')
+
 
 if not args.no_train:
     train_multiple_epochs(
@@ -483,7 +458,7 @@ if not args.no_train:
 
 
 ## Only take 4 last checkpoints
-checkpoints = sorted(glob(f"{args.res_dir}/model*.pth"))[-2:]
+checkpoints = sorted(glob(f"{args.res_dir}/model*.pth"))[-4:]
 
 if not args.ensemble:
     ## only choose best ckpt
@@ -503,3 +478,8 @@ rmse = test_once(
     checkpoints=checkpoints
 )
 print(f"Ensemble test rmse is: {rmse:.6f}")
+
+
+## Save state_dict of GNN and mixer
+if args.mode == "pretraining":
+    model.save_pretrained_weights()

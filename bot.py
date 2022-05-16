@@ -13,7 +13,7 @@ TIMES = 2
 def flix_dou_yah(dataset, pe_dim, scenario, cuda_device, ith, metric, mixer, mode):
     now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H:%M")
     SEED = random.randint(0, 20)
-    epoch = 40
+    epoch = 40 if mode == "pretraining" else 20
 
     if mode == "pretraining":
         path_log = f"logs/{mode}/{mixer}/{dataset}_{scenario}_{pe_dim}_{now}.log"
@@ -33,6 +33,7 @@ def flix_dou_yah(dataset, pe_dim, scenario, cuda_device, ith, metric, mixer, mod
             --lr 0.0008\
             --seed {SEED}\
             --pe-dim {pe_dim}\
+            --metric {metric}\
             --scenario {scenario}\
             --mode {mode}\
             --mixer {mixer} > {path_log}"

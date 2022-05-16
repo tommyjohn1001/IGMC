@@ -81,7 +81,7 @@ class SparseColIndexer:
 
 class MyDataset(InMemoryDataset):
     def __init__(self, root, A, links, labels, h, sample_ratio, max_nodes_per_hop, 
-                 u_features, v_features, class_values, pe_dim, max_num=None, parallel=True):
+                 u_features, v_features, class_values, pe_dim, metric, max_num=None, parallel=True):
         self.Arow = SparseRowIndexer(A)
         self.Acol = SparseColIndexer(A.tocsc())
         self.links = links
@@ -95,6 +95,8 @@ class MyDataset(InMemoryDataset):
         self.parallel = parallel
         self.max_num = max_num
         self.pe_dim = pe_dim
+        self.metric = metric
+    
         if max_num is not None:
             np.random.seed(123)
             num_links = len(links[0])
@@ -115,7 +117,7 @@ class MyDataset(InMemoryDataset):
     def process(self):
         # Extract enclosing subgraphs and save to disk
         data_list = links2subgraphs(self.Arow, self.Acol, self.links, self.labels, self.h, 
-                                    self.pe_dim, self.sample_ratio, self.max_nodes_per_hop, 
+                                    self.pe_dim, self.metric, self.sample_ratio, self.max_nodes_per_hop, 
                                     self.u_features, self.v_features, 
                                     self.class_values, self.parallel)
 
@@ -167,6 +169,7 @@ def links2subgraphs(Arow,
                     labels, 
                     h=1,
                     pe_dim=1, 
+                    metric="L1",
                     sample_ratio=1.0, 
                     max_nodes_per_hop=None, 
                     u_features=None, 
@@ -176,6 +179,8 @@ def links2subgraphs(Arow,
     # extract enclosing subgraphs
     print('Enclosing subgraph extraction begins...')
     g_list = []
+    parallel = True
+
     if not parallel:
         with tqdm(total=len(links[0])) as pbar:
             for i, j, g_label in zip(links[0], links[1], labels):
@@ -215,7 +220,7 @@ def links2subgraphs(Arow,
         pbar = tqdm(total=len(results))
         while results:
             tmp = results.pop()
-            data = construct_pyg_graph(*tmp, pe_dim)
+            data = construct_pyg_graph(*tmp, pe_dim, metric)
             if data is not None:
                 g_list.append(data)
             pbar.update(1)
@@ -273,28 +278,11 @@ def subgraph_extraction_labeling(ind, Arow, Acol, h=1, sample_ratio=1.0, max_nod
     if v_features is not None:
         v_features = v_features[v_nodes]
     node_features = None
-    if False: 
-        # directly use padded node features
-        if u_features is not None and v_features is not None:
-            u_extended = np.concatenate(
-                [u_features, np.zeros([u_features.shape[0], v_features.shape[1]])], 1
-            )
-            v_extended = np.concatenate(
-                [np.zeros([v_features.shape[0], u_features.shape[1]]), v_features], 1
-            )
-            node_features = np.concatenate([u_extended, v_extended], 0)
-    if False:
-        # use identity features (one-hot encodings of node idxes)
-        u_ids = one_hot(u_nodes, Arow.shape[0] + Arow.shape[1])
-        v_ids = one_hot([x+Arow.shape[0] for x in v_nodes], Arow.shape[0] + Arow.shape[1])
-        node_ids = np.concatenate([u_ids, v_ids], 0)
-        #node_features = np.concatenate([node_features, node_ids], 1)
-        node_features = node_ids
-    if True:
-        # only output node features for the target user and item
-        if u_features is not None and v_features is not None:
-            node_features = [u_features[0], v_features[0]]
-            
+    
+    # only output node features for the target user and item
+    if u_features is not None and v_features is not None:
+        node_features = [u_features[0], v_features[0]]
+        
     return u, v, r, node_labels, max_node_label, y, node_features, node_index
 
 
@@ -369,27 +357,6 @@ def get_non_edges(example: Data, k: int = 50) -> list:
 
     return non_edges
 
-def create_trg_regu_matrix(n_nodes: int, trg_user_idx: int, trg_item_idx: int):
-    """Create target matrix for training regularization loss which is achieved by ContrastiveLoss
-
-    Args:
-        n_nodes (int): no. nodes
-        trg_user_idx (int): index of target user
-        trg_item_idx (int): index of target item
-    """
-    pass
-
-def create_permute_matrix(size):
-    indices = list(range(size))
-    random.shuffle(indices)
-
-    permutation_map = {old: new for old, new in zip(range(size), indices)}
-
-    permutation_matrix = torch.zeros((size, size))
-    for i, j in enumerate(indices):
-        permutation_matrix[i][j] = 1
-
-    return permutation_matrix, permutation_map
 
 def get_rwpe(A, D, pos_enc_dim=5):
 
@@ -411,7 +378,38 @@ def get_rwpe(A, D, pos_enc_dim=5):
 
     return PE
 
-def create_permuted_graphs(data: Data, n=10, pos_enc_dim=5):
+def create_permute_matrix(size):
+    indices = list(range(size))
+    random.shuffle(indices)
+
+    permutation_map = {old: new for old, new in zip(range(size), indices)}
+
+    permutation_matrix = torch.zeros((size, size))
+    for i, j in enumerate(indices):
+        permutation_matrix[i][j] = 1
+
+    return permutation_matrix, permutation_map
+
+
+def create_trg_regu_matrix(trg_user_idx, trg_item_idx, n_nodes: int, metric: str = "L1"):
+    """Create target matrix for training regularization loss which is achieved by ContrastiveLoss"""
+
+    trg_matrix = torch.ones((n_nodes, n_nodes))
+    S = set([trg_user_idx, trg_item_idx])
+
+    for i in range(n_nodes):
+        for j in range(n_nodes):
+            condition1 = i not in S and j in S
+            condition2 = i in S and j not in S
+            if condition1 or condition2:
+                trg_matrix[i, j] = 0
+
+    if metric in ["L1", "L2"]:
+        trg_matrix = 1 - trg_matrix
+
+    return trg_matrix
+
+def create_permuted_graphs(data: Data, n=10, pos_enc_dim=5, metric: str = "L1") -> list:
     if len(data.edge_index[0]) == 0:
         x_perms = torch.zeros((n, data.x.size(0) + pos_enc_dim))
         targets_perms = torch.zeros((n, 2))
@@ -423,30 +421,27 @@ def create_permuted_graphs(data: Data, n=10, pos_enc_dim=5):
     A = pyg_utils.to_dense_adj(data.edge_index).squeeze(0)
 
     ## Get target user and item index
-    trg_user_idx, trg_item_idx = torch.where(data.x[:, 1] == 1)[0].item(), torch.where(data.x[:, 2] == 1)[0].item()
+    trg_user_idx, trg_item_idx = (
+        torch.where(data.x[:, 0] == 1)[0].item(),
+        torch.where(data.x[:, 1] == 1)[0].item(),
+    )
 
-    x_perms, targets_perms = [], []
+    permuted_graphs = []
     for _ in range(n):
         perm_matrix, perm_map = create_permute_matrix(len(D))
 
-        new_A = perm_matrix.T @ A @ perm_matrix
-        new_D = perm_matrix @ D.diag()
-        new_x = perm_matrix @ data.x
-        PE = get_rwpe(new_A, new_D.diagonal(), pos_enc_dim)
-        x_perm = torch.cat((new_x, PE), dim=-1).unsqueeze(1)
-        
+        new_A = perm_matrix @ A @ perm_matrix.T
+        new_D = perm_matrix @ D
+        x = get_rwpe(new_A, new_D, pos_enc_dim)
+
         new_user_idx, new_item_idx = perm_map[trg_user_idx], perm_map[trg_item_idx]
-        targets_perm = torch.tensor([new_user_idx, new_item_idx]).unsqueeze(0)
+        trg = create_trg_regu_matrix(new_user_idx, new_item_idx, len(D), metric)
 
-        x_perms.append(x_perm)
-        targets_perms.append(targets_perm)
+        permuted_graphs.append((x.numpy(), trg.numpy()))
 
-    x_perms = torch.cat(x_perms, dim=1)
-    targets_perms = torch.cat(targets_perms, dim=0)
+    return permuted_graphs
 
-    return x_perms, targets_perms
-
-def construct_pyg_graph(u, v, r, node_labels, max_node_label, y, node_features, node_index, pos_enc_dim):
+def construct_pyg_graph(u, v, r, node_labels, max_node_label, y, node_features, node_index, pos_enc_dim, metric):
     # TODO: Append node index of each node in u, v, node index is fetched from u_nodes, v_nodes to append to node_feat
     if len(u) == 0:
         return None
@@ -461,7 +456,8 @@ def construct_pyg_graph(u, v, r, node_labels, max_node_label, y, node_features, 
     data = Data(x, edge_index, edge_type=edge_type, y=y)
 
     ## Concate with node index
-    data.x = torch.cat([node_index.unsqueeze(-1), data.x], 1)
+    # NOTE: If using global node index, enable the following
+    # data.x = torch.cat([node_index.unsqueeze(-1), data.x], 1)
 
     if node_features is not None:
         if type(node_features) == list:  # a list of u_feature and v_feature
@@ -480,23 +476,14 @@ def construct_pyg_graph(u, v, r, node_labels, max_node_label, y, node_features, 
     # get_features_sp_sample(data, pos_enc_dim)
 
     ## Add non-edges
-    non_edges = get_non_edges(data)
-    non_edges = torch.tensor(non_edges, dtype=torch.long).permute((1,0))
-    data.non_edge_index = non_edges
+    # NOTE: if using idea EdgeAugment, enable the following
+    # non_edges = get_non_edges(data)
+    # non_edges = torch.tensor(non_edges, dtype=torch.long).permute((1,0))
+    # data.non_edge_index = non_edges
 
-    # NOTE: replace DRNL by random initialization
-    # x1 = torch.FloatTensor(one_hot(node_labels, max_node_label+1))
-    x = torch.rand((len(node_labels), max_node_label + 1))
-    # if x.shape != x1.shape:
-    #     print(f"x : {x.shape}")
-    #     print(f"x1: {x1.shape}")
-    #     exit()
 
-    x_perms, targets_perms = create_permuted_graphs(data)
-    if len(x_perms.shape) < 3:
-        print(f"x_perms: {x_perms.shape} - targets_perms: {targets_perms.shape}")
-        exit()
-    data.x_perms, data.targets_perms = x_perms, targets_perms
+    permuted_graphs = create_permuted_graphs(data, n=5, pos_enc_dim=pos_enc_dim, metric=metric)
+    data.permuted_graphs = permuted_graphs
 
     return data
 

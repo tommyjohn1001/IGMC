@@ -5,6 +5,7 @@ from all_packages import *
 from hypermixer import HyperMixerLayer
 from layers import *
 from regularization.mlp import MLP
+from regularization.models import ContrastiveModel
 from util_functions import *
 
 
@@ -24,20 +25,16 @@ class IGMC(GNN):
         side_features=False,
         n_side_features=0,
         multiply_by=1,
-        pe_dim=20,
         n_nodes=3000,
         class_values=None,
-        scenario=1,
         dropout=0.2,
-        mixer=None,
-        mode=None,
-        dataname=None,
+        args=None,
     ):
         # gconv = GatedGCNLayer GatedGCNLSPELayer RGatedGCNLayer RGCNConv
-        if scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
+        if args.scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
             # gconv = RGCNConvLSPE GatedGCNLSPELayer NewFastRGCNConv OldRGCNConvLSPE
             gconv = OldRGCNConvLSPE
-        elif scenario in [9, 10, 11, 12, 13, 14, 15, 16]:
+        elif args.scenario in [9, 10, 11, 12, 13, 14, 15, 16]:
             gconv = GatedGCNLSPELayer
         else:
             raise NotImplementedError()
@@ -57,38 +54,40 @@ class IGMC(GNN):
             latent_dim = [32, 32, 32, 32]
 
         self.multiply_by = multiply_by
-        self.scenario = scenario
         self.class_values = class_values
-        self.mode = mode
         self.gconv = gconv
         self.side_features = side_features
-        self.dataname = dataname
-        self.pe_dim = pe_dim
+        self.scenario = args.scenario
+        self.mode = args.mode
+        self.metric = args.metric
+        self.dataname = args.data_name
+        self.pe_dim = args.pe_dim
+        self.arr = args.ARR
 
         ## Declare modules to convert node feat, pe to hidden vectors
-        self.node_feat_dim = dataset.num_features - pe_dim - 1
+        self.node_feat_dim = dataset.num_features - self.pe_dim
         if self.scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
-            self.lin_pe = nn.Linear(pe_dim, self.node_feat_dim)
+            self.lin_pe = nn.Linear(self.pe_dim, self.node_feat_dim)
         elif self.scenario in [9, 10, 11, 12, 13, 14, 15, 16]:
-            self.lin_pe = nn.Linear(pe_dim, latent_dim[0])
+            self.lin_pe = nn.Linear(self.pe_dim, latent_dim[0])
             self.edge_embd = nn.Linear(1, latent_dim[0])
             self.lin_x = nn.Linear(self.node_feat_dim, latent_dim[0])
 
         ## Declare GNN layers
         self.convs = torch.nn.ModuleList()
-        if scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
+        if self.scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
             # kwargs = {"num_relations": num_relations, "num_bases": num_bases, "is_residual": True}
             kwargs = {"num_relations": num_relations, "num_bases": num_bases}
             self.convs.append(gconv(self.node_feat_dim, latent_dim[0], **kwargs))
             for i in range(0, len(latent_dim) - 1):
                 self.convs.append(gconv(latent_dim[i], latent_dim[i + 1], **kwargs))
-        elif scenario in [9, 10, 11, 12, 13, 14, 15, 16]:
+        elif self.scenario in [9, 10, 11, 12, 13, 14, 15, 16]:
             self.convs.append(gconv(latent_dim[0], latent_dim[0]))
             for i in range(0, len(latent_dim) - 1):
                 self.convs.append(gconv(latent_dim[i], latent_dim[i + 1]))
 
         ## Declare Mixer: TransEncoder ; HyperMixer
-        if mixer == "trans_encoder":
+        if args.mixer == "trans_encoder":
             self.mixer = nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model=4, nhead=2), 4)
         elif self.mixer == "hyper_mixer":
             self.mixer = nn.Sequential(*[HyperMixerLayer(N=420, hid_dim=4) for _ in range(4)])
@@ -96,9 +95,9 @@ class IGMC(GNN):
             raise NotImplementedError()
 
         ## Define final FF
-        if scenario in [1, 2, 3, 4, 9, 10, 11, 12]:
+        if self.scenario in [1, 2, 3, 4, 9, 10, 11, 12]:
             final_dim = 2 * sum(latent_dim)
-        elif scenario in [5, 6, 7, 8, 13, 14, 15, 16]:
+        elif self.scenario in [5, 6, 7, 8, 13, 14, 15, 16]:
             final_dim = 4 * sum(latent_dim)
         else:
             raise NotImplementedError()
@@ -119,6 +118,8 @@ class IGMC(GNN):
         ## Load weights of Contrastive MLP layer
         if self.mode == "coop":
             self.load_pretrained_weights()
+            self.contrastive_model = ContrastiveModel(d_pe=self.pe_dim, metric=self.metric)
+            self.mlp_contrastive = self.contrastive_model.mlp
 
     def save_pretrained_weights(self):
         """Save weights of gconv layers and mixer"""
@@ -140,6 +141,8 @@ class IGMC(GNN):
             exit(1)
 
         ## Load gconvs and mixer
+        logger.info(f"Load pretrained weights from: {path_pretrained}")
+
         pretrained_weights = torch.load(path_pretrained)
         self.mixer.load_state_dict(pretrained_weights["mixer"])
         for ith, conv in enumerate(self.convs):
@@ -176,14 +179,47 @@ class IGMC(GNN):
 
         return mask
 
-    def forward(self, data, epoch=-1, is_training=True):
-        x, edge_index, edge_type, batch, non_edges = (
+    def conv2tensor(self, permuted_graphs: list, device=None, dtype=None):
+        x, trg = [], []
+        for p in permuted_graphs:
+            x += [torch.from_numpy(_[0]).to(device=device, dtype=dtype) for _ in p[0]]
+            trg += [torch.from_numpy(_[1]).to(device=device, dtype=dtype) for _ in p[0]]
+        # x: list of [n*, d]
+        # trg: list of [n*, n*]
+
+        n_max = max([_.shape[0] for _ in x])
+        d = x[0].shape[-1]
+
+        X, trgs, mask = [], None, []
+
+        ## Create mask
+        mask = torch.tensor([x_.shape[0] for x_ in x])
+        # [bz]
+
+        ## Create X
+        for x_ in x:
+            pad0 = torch.zeros((n_max - x_.shape[0], d), device=device, dtype=dtype)
+            x_ = torch.cat((x_, pad0), dim=0)
+            X.append(x_)
+        X = torch.stack(X)
+        # [bz, n_max, d]
+
+        trgs = torch.block_diag(*trg)
+        # [N, N]
+
+        return X, trgs, mask
+
+    def forward(self, data):
+
+        x, edge_index, edge_type, batch, permuted_graphs = (
             data.x,
             data.edge_index,
             data.edge_type,
             data.batch,
-            data.non_edge_index,
+            data.permuted_graphs,
         )
+
+        device, dtype = x.device, x.dtype
 
         if self.adj_dropout > 0:
             edge_index, edge_type = dropout_adj(
@@ -195,11 +231,22 @@ class IGMC(GNN):
                 training=self.training,
             )
 
+        #########################################################
+        ## 1. Calculate Contrastive Learning loss
+        #########################################################
+        loss_mse_contrs = 0
+        if self.mode == "coop":
+            X, trgs, mask = self.conv2tensor(permuted_graphs, device=device, dtype=dtype)
+
+            loss_mse_contrs = self.contrastive_model(X=X, trgs=trgs, mask=mask)
+
+        #########################################################
+        ## 2. Pass thru GNN
+        #########################################################
         ## Extract node feature, RWPE info and global node index
-        node_indx, node_subgraph_feat, pe = (
-            x[:, :1].long(),
-            x[:, 1 : self.node_feat_dim + 1],
-            x[:, self.node_feat_dim + 1 :],
+        node_subgraph_feat, pe = (
+            x[:, : self.node_feat_dim],
+            x[:, self.node_feat_dim :],
         )
 
         if isinstance(self.mixer, nn.TransformerEncoder):
@@ -252,14 +299,34 @@ class IGMC(GNN):
 
         concat_states = torch.cat(concat_states, 1)
 
-        users = data.x[:, 1] == 1
-        items = data.x[:, 2] == 1
+        users = data.x[:, 0] == 1
+        items = data.x[:, 1] == 1
         x = torch.cat([concat_states[users], concat_states[items]], 1)
         if self.side_features:
             x = torch.cat([x, data.u_feature, data.v_feature], 1)
 
-        x = self.final_ff(x)
-        if self.regression:
-            return x[:, 0] * self.multiply_by
-        else:
-            return F.log_softmax(x, dim=-1)
+        x = self.final_ff(x)[:, 0]
+
+        #########################################################
+        ## 3. Calculate loss
+        #########################################################
+        loss = 0
+
+        ## Loss MSE from GNN: relation prediction
+        loss_mse_GNN = F.mse_loss(x, data.y.view(-1))
+
+        ## Loss reguarization ARR
+        if self.scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
+            for gconv in self.convs:
+                w = torch.matmul(gconv.att, gconv.basis.view(gconv.num_bases, -1)).view(
+                    gconv.num_relations, gconv.in_channels, gconv.out_channels
+                )
+                reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :]) ** 2)
+        elif self.scenario in [9, 10, 11, 12, 13, 14, 15, 16]:
+            w = self.edge_embd.weight
+            reg_loss = torch.sum((w[1:] - w[:-1]) ** 2)
+        loss_reg = self.arr * reg_loss
+
+        loss = loss_mse_contrs + loss_mse_GNN + loss_reg
+
+        return loss, x

@@ -12,12 +12,9 @@ from torch.optim import Adam, AdamW
 
 # from torch_geometric.data import DataLoader ## Only use if using newer pyg version
 from torch_geometric.data import DataLoader
-from torch_geometric.data import DenseDataLoader as DenseLoader
 from tqdm import tqdm
+
 from regularization.models import get_linear_schedule_with_warmup
-
-
-
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -46,7 +43,6 @@ def train_multiple_epochs(
         num_workers = mp.cpu_count()
     else:
         num_workers = 2
-
 
     train_loader = DataLoader(train_dataset, batch_size, shuffle=True, num_workers=num_workers)
     if test_dataset.__class__.__name__ == "MyDynamicDataset":
@@ -99,10 +95,6 @@ def train_multiple_epochs(
             "train_loss": train_loss,
             "test_rmse": rmses[-1],
         }
-        # if not batch_pbar:
-        #     pbar.set_description(
-        #         'Epoch {}, train loss {:.6f}, test rmse {:.6f}'.format(*eval_info.values())
-        #     )
         print("Epoch {}, train loss {:.6f}, val rmse {:.6f}".format(*eval_info.values()))
 
         if epoch % lr_decay_step_size == 0:
@@ -113,6 +105,10 @@ def train_multiple_epochs(
             logger(eval_info, model, optimizer, args.testing)
 
         lr_sched.step()
+
+        ## Save state_dict of GNN and mixer
+        if args.mode == "pretraining" and epoch == epochs // 2:
+            model.save_pretrained_weights()
 
     if torch.cuda.is_available():
         torch.cuda.synchronize()
@@ -126,7 +122,7 @@ def test_once(test_dataset, model, batch_size, logger=None, ensemble=False, chec
 
     test_loader = DataLoader(test_dataset, batch_size, shuffle=False)
     model.to(device)
-    
+
     if ensemble and checkpoints:
         rmse = eval_rmse_ensemble(model, checkpoints, test_loader, device, show_progress=True)
     else:
@@ -168,28 +164,12 @@ def train(
         pbar = tqdm(loader)
     else:
         pbar = loader
-    for ith, data in enumerate(pbar):
+    for data in pbar:
         optimizer.zero_grad()
         data = data.to(device)
-        out = model(data, epoch)
-        if regression:
-            loss = F.mse_loss(out, data.y.view(-1))
-        else:
-            loss = F.nll_loss(out, data.y.view(-1))
-        if show_progress:
-            pbar.set_description("Epoch {}, batch loss: {}".format(epoch, loss.item()))
+        loss, _ = model(data)
 
-        if args.scenario in [1, 2, 3, 4, 5, 6, 7, 8]:
-            for gconv in model.convs:
-                w = torch.matmul(
-                    gconv.att, 
-                    gconv.basis.view(gconv.num_bases, -1)
-                ).view(gconv.num_relations, gconv.in_channels, gconv.out_channels)
-                reg_loss = torch.sum((w[1:, :, :] - w[:-1, :, :])**2)
-        elif args.scenario in [9, 10, 11, 12, 13, 14, 15, 16]:
-            w = model.edge_embd.weight
-            reg_loss = torch.sum((w[1:] - w[:-1]) ** 2)
-        loss += ARR * reg_loss
+        pbar.set_description(f"Epoch {epoch}, batch loss: {loss.item()}")
 
         loss.backward()
         total_loss += loss.item() * num_graphs(data)
@@ -209,11 +189,10 @@ def eval_loss(model, loader, device, regression=False, show_progress=False):
     for data in pbar:
         data = data.to(device)
         with torch.no_grad():
-            out = model(data, is_training=False)
-        if regression:
-            loss += F.mse_loss(out, data.y.view(-1), reduction="sum").item()
-        else:
-            loss += F.nll_loss(out, data.y.view(-1), reduction="sum").item()
+            _, out = model(data)
+
+        loss += F.mse_loss(out, data.y.view(-1), reduction="sum").item()
+
         torch.cuda.empty_cache()
     return loss / len(loader.dataset)
 
@@ -243,7 +222,7 @@ def eval_loss_ensemble(model, checkpoints, loader, device, regression=False, sho
             if i == 0:
                 ys.append(data.y.view(-1))
             with torch.no_grad():
-                out = model(data, is_training=False)
+                _, out = model(data)
                 outs.append(out)
         if i == 0:
             ys = torch.cat(ys, 0)
@@ -262,4 +241,3 @@ def eval_rmse_ensemble(model, checkpoints, loader, device, show_progress=False):
     mse_loss = eval_loss_ensemble(model, checkpoints, loader, device, True, show_progress)
     rmse = math.sqrt(mse_loss)
     return rmse
-

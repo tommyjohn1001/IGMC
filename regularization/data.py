@@ -1,6 +1,5 @@
 from all_packages import *
 
-
 def collate_fn(batch):
     x, trg = [torch.from_numpy(_[0]) for _ in batch], [torch.from_numpy(_[1]) for _ in batch]
     # x: list of [n*, d]

@@ -87,6 +87,7 @@ parser = argparse.ArgumentParser(description='Inductive Graph-based Matrix Compl
 parser.add_argument("--scenario", type=int, default=1)
 parser.add_argument("--mixer", type=str, default="trans_encoder", choices=['hyper_mixer', 'trans_encoder'])
 parser.add_argument("--mode", type=str, default="pretraining", choices=['pretraining', 'coop'])
+parser.add_argument("--metric", type=str, default="L1", choices=["cosine", "L1", "L2"])
 parser.add_argument('--testing', action='store_true', default=False,
                     help='if set, use testing mode which splits all ratings into train/test;\
                     otherwise, use validation model which splits all ratings into \
@@ -124,7 +125,7 @@ parser.add_argument('--keep-old', action='store_true', default=False,
 parser.add_argument('--save-interval', type=int, default=10,
                     help='save model states every # epochs ')
 # subgraph extraction settings
-parser.add_argument('--pe-dim', type=int, default=20)
+parser.add_argument('--pe-dim', type=int, default=40)
 parser.add_argument('--hop', default=1, metavar='S', 
                     help='enclosing subgraph hop number')
 parser.add_argument('--sample-ratio', type=float, default=1.0, 
@@ -361,7 +362,8 @@ train_graphs = eval(dataset_class)(
     u_features, 
     v_features, 
     class_values,
-    args.pe_dim, 
+    args.pe_dim,
+    args.metric,
     max_num=args.max_train_num
 )
 dataset_class = 'MyDynamicDataset' if args.dynamic_test else 'MyDataset'
@@ -369,30 +371,32 @@ test_graphs = eval(dataset_class)(
     'data/{}{}/{}/test'.format(*data_combo),
     adj_train, 
     test_indices, 
-    test_labels, 
-    args.hop, 
-    args.sample_ratio, 
-    args.max_nodes_per_hop, 
-    u_features, 
-    v_features, 
+    test_labels,
+    args.hop,
+    args.sample_ratio,
+    args.max_nodes_per_hop,
+    u_features,
+    v_features,
     class_values,
-    args.pe_dim, 
+    args.pe_dim,
+    args.metric,
     max_num=args.max_test_num
 )
 if not args.testing:
     dataset_class = 'MyDynamicDataset' if args.dynamic_val else 'MyDataset'
     val_graphs = eval(dataset_class)(
         'data/{}{}/{}/val'.format(*data_combo),
-        adj_train, 
-        val_indices, 
-        val_labels, 
+        adj_train,
+        val_indices,
+        val_labels,
         args.hop, 
         args.sample_ratio, 
         args.max_nodes_per_hop, 
         u_features, 
         v_features, 
         class_values,
-        args.pe_dim, 
+        args.pe_dim,
+        args.metric,
         max_num=args.max_val_num
     )
 else:
@@ -425,13 +429,9 @@ model = IGMC(
     side_features=args.use_features,
     n_side_features=n_features,
     multiply_by=multiply_by,
-    pe_dim=args.pe_dim,
     n_nodes=n_nodes,
     class_values=class_values,
-    scenario=args.scenario,
-    mixer=args.mixer,
-    mode=args.mode,
-    dataname=args.data_name,
+    args=args
 )
 total_params = sum(p.numel() for param in model.parameters() for p in param)
 print(f'Total number of parameters is {total_params}')
@@ -478,8 +478,3 @@ rmse = test_once(
     checkpoints=checkpoints
 )
 print(f"Ensemble test rmse is: {rmse:.6f}")
-
-
-## Save state_dict of GNN and mixer
-if args.mode == "pretraining":
-    model.save_pretrained_weights()

@@ -1,3 +1,8 @@
+## May 16 | 23:31
+
+- Finish implementing code for `coop mode`: Regularization and GNN at the same time
+- Implement part of code to create data for training: adding permuted graphs to data
+
 ## May 16 | 16:58
 
 - Implement training "pretraining" phase

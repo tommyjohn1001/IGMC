@@ -249,6 +249,9 @@ class IGMC(GNN):
             x[:, self.node_feat_dim :],
         )
 
+        ## Random features
+        node_subgraph_feat = torch.rand_like(node_subgraph_feat)
+
         if isinstance(self.mixer, nn.TransformerEncoder):
             mask = self.create_trans_mask(batch, x.dtype, x.device)
             node_subgraph_feat = self.mixer(node_subgraph_feat.unsqueeze(1), mask).squeeze(1)

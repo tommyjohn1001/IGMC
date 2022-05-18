@@ -1,7 +1,9 @@
 from all_packages import *
-from torch.optim.adamw import AdamW
 from torch.optim.lr_scheduler import LambdaLR
+from torch_geometric.data import Data
+from tqdm import tqdm
 
+import regularization.utils as reg_utils
 from regularization.mlp import MLP
 
 
@@ -35,7 +37,7 @@ def get_linear_schedule_with_warmup(optimizer, num_warmup_epochs, num_train_epoc
 
 
 class ContrastiveDistance(nn.Module):
-    def __init__(self, tau=0.07, eps=1e-8, metric="L1"):
+    def __init__(self, tau=0.07, eps=1e-8, metric="L2"):
         super().__init__()
 
         self.tau = tau
@@ -46,7 +48,7 @@ class ContrastiveDistance(nn.Module):
         """
         added eps for numerical stability
         """
-        # a, b: [bz, n_max, d]
+        # a, b: [n_max, d]
 
         a_n, b_n = a.norm(dim=-1, keepdim=True), b.norm(dim=-1, keepdim=True)
 
@@ -61,20 +63,20 @@ class ContrastiveDistance(nn.Module):
         else:
             raise NotImplementedError()
 
-        # sim_mt: [bz, n_max, n_max]
+        # sim_mt: [n_max, n_max]
 
         return sim_mt
 
-    def forward(self, x: Tensor):
-        # x: [bz, n_max, d]
+    def forward(self, x: Tensor, batch: Tensor):
+        # x: [n_max, d]
 
-        bz, n_max, _ = x.shape
+        n_max = x.shape[0]
 
         device, dtype = x.device, x.dtype
 
         ## Calculate sim matrix
         sim_matrix = self.get_sim_matrix(x, x, self.eps)
-        # [bz, n_max, n_max]
+        # [n_max, n_max]
 
         ## Divide by temperature
         sim_matrix = torch.div(sim_matrix, self.tau)
@@ -82,142 +84,103 @@ class ContrastiveDistance(nn.Module):
         ## Numerically stable trick
         sim_matrix_max, _ = torch.max(sim_matrix, dim=-1, keepdim=True)
         sim_matrix = sim_matrix - sim_matrix_max.detach()
-        # [bz, n_max, n_max]
+        # [n_max, n_max]
 
         ## Mask out self-contrasted cases
         mask_selfcontrs = torch.ones(n_max, device=device, dtype=dtype).diag()
-        mask_selfcontrs = mask_selfcontrs.unsqueeze(0).repeat(bz, 1, 1)
         mask_selfcontrs.masked_fill_(mask_selfcontrs == 1, float("-inf"))
-        # [bz, n_max, n_max]
+        # [n_max, n_max]
         sim_matrix_masked = sim_matrix + mask_selfcontrs
-        # [bz, n_max, n_max]
+        # [n_max, n_max]
+
+        ## Mask out positions in sim_matrix which nor present similarity
+        ## of 2 nodes within the same graph
+        mask_notsamegraph = []
+        for b in batch.unique():
+            n_nodes_graph = torch.sum(batch == b)
+            mask = torch.ones((n_nodes_graph, n_nodes_graph), device=device, dtype=dtype)
+            # [n_nodes_graph, n_nodes_graph]
+            mask_notsamegraph.append(mask)
+        mask_notsamegraph = torch.block_diag(*mask_notsamegraph)
+        # [n_max, n_max]
+        mask_notsamegraph = 1 - mask_notsamegraph
+        sim_matrix_masked.masked_fill_(mask_notsamegraph == 1, float("-inf"))
 
         ## Calculate distance matrix
         sim_matrix_logsumexp = torch.logsumexp(sim_matrix_masked, dim=-1, keepdim=True)
-        # [bz, n_max, n_max]
+        # [n_max, n_max]
         distance = sim_matrix_logsumexp - sim_matrix
-        # [bz, n_max, n_max]
-
-        ## This line ensures values lie between 0 and 1
-        # distance = torch.sigmoid(distance)
+        # [n_max, n_max]
 
         return distance
 
 
 class ContrastiveModel(nn.Module):
-    def __init__(self, d_pe, tau=0.07, eps=1e-8, dropout=0.25, metric="L1"):
-        super().__init__()
-
-        self.ConDistance = ContrastiveDistance(tau=tau, eps=eps, metric=metric)
-        self.mlp = MLP(d=d_pe, dropout=dropout)
-        self.criterion_mse = nn.MSELoss()
-
-    def forward(self, X: Tensor, trgs: Tensor, mask: Tensor):
-        # X: [bz, n_max, d]
-        # mask: [bz]
-        # trgs: [N, N]
-
-        bz = X.size(0)
-
-        ## 1. Apply MLP
-        X = self.mlp(X)
-        # [bz, n_max, d]
-
-        ## 2. Calculate distace matrix L_hat
-        L_hat = self.ConDistance(X)
-        # [bz, n_max, n_max]
-
-        ## 3. Do some magic to convert L_hat to the same shape with trgs
-        L_hat_ = []
-        for b in range(bz):
-            L_batch, mask_ = L_hat[b], mask[b]
-            L_hat_.append(L_batch[:mask_, :mask_])
-
-        L_hat = torch.block_diag(*L_hat_)
-
-        ## 4. Calculate MSE loss
-        loss_mse = 1 / bz * self.criterion_mse(L_hat, trgs)
-
-        return loss_mse
-
-
-#################################################################
-# For LitModel
-#################################################################
-
-
-class ContrasLearnLitModel(plt.LightningModule):
     def __init__(
         self,
-        d_pe,
-        batch_size=50,
+        pe_dim=40,
         tau=0.07,
         eps=1e-8,
         dropout=0.25,
-        metric="L1",
-        weight_decay=1e-2,
-        lr=5e-4,
-        num_warmup_epochs=10,
-        num_train_epochs=50,
+        metric="L2",
+        n_perm_subgraphs=5,
+        n_samples_equi=5,
+        alpha=0,
+        beta=2,
     ):
         super().__init__()
 
-        self._hparams = {
-            "d_pe": d_pe,
-            "batch_size": batch_size,
-            "tau": tau,
-            "eps": eps,
-            "dropout": dropout,
-            "weight_decay": weight_decay,
-            "lr": lr,
-            "num_warmup_epochs": num_warmup_epochs,
-            "num_train_epochs": num_train_epochs,
-        }
-        self.save_hyperparameters()
+        self.metric = metric
+        self.n_perm_subgraphs, self.n_samples_equi = n_perm_subgraphs, n_samples_equi
+        self.alpha, self.beta = alpha, beta
+        self.pe_dim = pe_dim
 
-        self.model = ContrastiveModel(d_pe=d_pe, tau=tau, eps=eps, dropout=dropout, metric=metric)
+        self.ConDistance = ContrastiveDistance(tau=tau, eps=eps, metric=metric)
+        self.mlp = MLP(d=pe_dim, dropout=dropout)
+        self.criterion_mse = nn.MSELoss()
 
-    def training_step(self, batch: Any, batch_idx: int):
-        loss_mse = self.model(*batch)
+    def forward(self, data: Data):
+        # data.x: [n_max, d]
 
-        self.log(
-            "train_loss",
-            loss_mse,
-            on_step=True,
-            on_epoch=True,
-            batch_size=self._hparams["batch_size"],
-        )
+        batch = data.batch
+        device, dtype = data.x.device, data.x.dtype
+        n_nodes = data.x.shape[0]
 
-        return loss_mse
+        loss_target_dis = 0
+        loss_equi = 0
+        for _ in range(self.n_perm_subgraphs):
+            pe_perm, L_trg__origin = reg_utils.create_permuted_subgraph(
+                data,
+                pe_dim=self.pe_dim,
+                metric=self.metric,
+                alpha=self.alpha,
+                beta=self.beta,
+                device=device,
+                dtype=dtype,
+            )
 
-    def validation_step(self, batch: Any, batch_idx: int):
-        loss_mse = self.model(*batch)
+            pe_origin = self.mlp(pe_perm)
 
-        self.log(
-            "val_loss",
-            loss_mse,
-            on_step=False,
-            on_epoch=True,
-            batch_size=self._hparams["batch_size"],
-        )
+            L_hat_origin = self.ConDistance(pe_origin, batch)
+            # [n_max, n_max]
 
-        return loss_mse
+            loss_target_dis = self.criterion_mse(L_hat_origin, L_trg__origin)
 
-    def configure_optimizers(self):
-        optimizer = AdamW(
-            self.model.parameters(),
-            lr=self._hparams["lr"],
-            weight_decay=self._hparams["weight_decay"],
-        )
+            ## For Equivariance
+            loss_equi_ = 0
+            for _ in range(self.n_samples_equi):
 
-        optimizer = torch.optim.Adam(self.parameters(), lr=self._hparams["lr"])
+                transform_matrix = reg_utils.sample_transform_matrix(
+                    n_nodes, batch=data.batch, device=device, dtype=dtype
+                )
+                pe_transform = transform_matrix @ pe_origin
+                L_hat_transform = self.ConDistance(pe_transform, batch)
+                # [n_max, n_max]
 
-        scheduler = {
-            "scheduler": get_linear_schedule_with_warmup(
-                optimizer, self._hparams["num_warmup_epochs"], self._hparams["num_train_epochs"]
-            ),
-            "interval": "epoch",  # 'step' or 'epoch'
-            "frequency": 1,
-        }
+                loss_equi_ += self.criterion_mse(L_hat_transform, L_hat_origin)
 
-        return [optimizer], [scheduler]
+            loss_equi += 1 / self.n_samples_equi * loss_equi_
+
+        loss_contrastive = 1 / self.n_perm_subgraphs * (loss_target_dis + loss_equi)
+
+        return loss_contrastive

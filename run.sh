@@ -9,13 +9,13 @@ SCENARIO=2
 SEED=1
 CUDA_VISIBLE_DEVICES=1 python Main.py\
         --data-name yahoo_music\
-        --epochs 40\
+        --epochs 10\
         --save-appendix _${PE_DIM}_${SCENARIO}\
         --data-appendix _${PE_DIM}\
         --pe-dim ${PE_DIM}\
         --ensemble\
         --testing\
-        --batch-size 50\
+        --batch-size 4\
         --lr 0.0008\
         --seed ${SEED}\
         --scenario ${SCENARIO}\

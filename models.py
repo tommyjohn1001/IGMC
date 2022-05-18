@@ -1,3 +1,4 @@
+from numpy import dtype
 from torch_geometric.nn import RGCNConv
 from torch_geometric.utils import dropout_adj
 
@@ -89,7 +90,7 @@ class IGMC(GNN):
         ## Declare Mixer: TransEncoder ; HyperMixer
         if args.mixer == "trans_encoder":
             self.mixer = nn.TransformerEncoder(nn.TransformerEncoderLayer(d_model=4, nhead=2), 4)
-        elif self.mixer == "hyper_mixer":
+        elif args.mixer == "hyper_mixer":
             self.mixer = nn.Sequential(*[HyperMixerLayer(N=420, hid_dim=4) for _ in range(4)])
         else:
             raise NotImplementedError()
@@ -118,9 +119,10 @@ class IGMC(GNN):
         ## Load weights of Contrastive MLP layer
         if self.mode == "coop":
             self.load_pretrained_weights()
-            self.contrastive_model = ContrastiveModel(d_pe=self.pe_dim, metric=self.metric)
+            self.contrastive_model = ContrastiveModel(pe_dim=self.pe_dim, metric=self.metric)
             self.mlp_contrastive = self.contrastive_model.mlp
 
+    ## Methods associated with weights
     def save_pretrained_weights(self):
         """Save weights of gconv layers and mixer"""
         path_pretrained = f"weights/{self.dataname}/{self.scenario}_{self.pe_dim}_{self.gconv.__name__}_{type(self.mixer).__name__}.pkl"
@@ -159,6 +161,8 @@ class IGMC(GNN):
             elif isinstance(m, (GatedGCNLayer, GatedGCNLSPELayer)):
                 m.initialize_weights()
 
+
+    ## Other util methods
     def conv_score2class(self, score, device=None):
         if not isinstance(self.class_values, torch.Tensor):
             self.class_values = torch.tensor(self.class_values, device=device)
@@ -179,47 +183,14 @@ class IGMC(GNN):
 
         return mask
 
-    def conv2tensor(self, permuted_graphs: list, device=None, dtype=None):
-        x, trg = [], []
-        for p in permuted_graphs:
-            x += [torch.from_numpy(_[0]).to(device=device, dtype=dtype) for _ in p[0]]
-            trg += [torch.from_numpy(_[1]).to(device=device, dtype=dtype) for _ in p[0]]
-        # x: list of [n*, d]
-        # trg: list of [n*, n*]
-
-        n_max = max([_.shape[0] for _ in x])
-        d = x[0].shape[-1]
-
-        X, trgs, mask = [], None, []
-
-        ## Create mask
-        mask = torch.tensor([x_.shape[0] for x_ in x])
-        # [bz]
-
-        ## Create X
-        for x_ in x:
-            pad0 = torch.zeros((n_max - x_.shape[0], d), device=device, dtype=dtype)
-            x_ = torch.cat((x_, pad0), dim=0)
-            X.append(x_)
-        X = torch.stack(X)
-        # [bz, n_max, d]
-
-        trgs = torch.block_diag(*trg)
-        # [N, N]
-
-        return X, trgs, mask
-
+    ## Forward method
     def forward(self, data):
-
-        x, edge_index, edge_type, batch, permuted_graphs = (
+        x, edge_index, edge_type, batch = (
             data.x,
             data.edge_index,
             data.edge_type,
-            data.batch,
-            data.permuted_graphs,
+            data.batch
         )
-
-        device, dtype = x.device, x.dtype
 
         if self.adj_dropout > 0:
             edge_index, edge_type = dropout_adj(
@@ -236,9 +207,7 @@ class IGMC(GNN):
         #########################################################
         loss_mse_contrs = 0
         if self.mode == "coop":
-            X, trgs, mask = self.conv2tensor(permuted_graphs, device=device, dtype=dtype)
-
-            loss_mse_contrs = self.contrastive_model(X=X, trgs=trgs, mask=mask)
+            loss_mse_contrs = self.contrastive_model(data=data)
 
         #########################################################
         ## 2. Pass thru GNN

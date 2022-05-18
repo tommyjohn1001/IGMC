@@ -41,14 +41,14 @@ srun --container-image=/lustre/scratch/client/vinai/users/hoanglh88/utils/dc-min
      python bot.py --scenario  6 -g 1 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop &\
      python bot.py --scenario  7 -g 2 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop &\
      python bot.py --scenario  8 -g 3 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop
-     python bot.py --scenario  9 -g 0 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop &\
-     python bot.py --scenario 10 -g 1 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop &\ 
-     python bot.py --scenario 11 -g 2 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop &\
-     python bot.py --scenario 12 -g 3 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop &\
-     python bot.py --scenario 13 -g 0 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop &\
-     python bot.py --scenario 14 -g 1 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop &\
-     python bot.py --scenario 15 -g 2 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop &\
-     python bot.py --scenario 16 -g 3 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop
+     # python bot.py --scenario  9 -g 0 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop &\
+     # python bot.py --scenario 10 -g 1 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop &\ 
+     # python bot.py --scenario 11 -g 2 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop &\
+     # python bot.py --scenario 12 -g 3 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop &\
+     # python bot.py --scenario 13 -g 0 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop &\
+     # python bot.py --scenario 14 -g 1 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop &\
+     # python bot.py --scenario 15 -g 2 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop &\
+     # python bot.py --scenario 16 -g 3 --metric L2 --mixer trans_encoder --dataset yahoo_music --mode coop
 
      python bot.py --scenario  1 -g 0 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\
      python bot.py --scenario  2 -g 1 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\
@@ -57,30 +57,30 @@ srun --container-image=/lustre/scratch/client/vinai/users/hoanglh88/utils/dc-min
      python bot.py --scenario  5 -g 0 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\
      python bot.py --scenario  6 -g 1 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\
      python bot.py --scenario  7 -g 2 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\
-     python bot.py --scenario  8 -g 3 --metric L2 --mixer trans_encoder --dataset flixster --mode coop
-     python bot.py --scenario  9 -g 0 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\
-     python bot.py --scenario 10 -g 1 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\ 
-     python bot.py --scenario 11 -g 2 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\
-     python bot.py --scenario 12 -g 3 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\
-     python bot.py --scenario 13 -g 0 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\
-     python bot.py --scenario 14 -g 1 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\
-     python bot.py --scenario 15 -g 2 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\
-     python bot.py --scenario 16 -g 3 --metric L2 --mixer trans_encoder --dataset flixster --mode coop
+     # python bot.py --scenario  8 -g 3 --metric L2 --mixer trans_encoder --dataset flixster --mode coop
+     # python bot.py --scenario  9 -g 0 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\
+     # python bot.py --scenario 10 -g 1 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\ 
+     # python bot.py --scenario 11 -g 2 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\
+     # python bot.py --scenario 12 -g 3 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\
+     # python bot.py --scenario 13 -g 0 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\
+     # python bot.py --scenario 14 -g 1 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\
+     # python bot.py --scenario 15 -g 2 --metric L2 --mixer trans_encoder --dataset flixster --mode coop &\
+     # python bot.py --scenario 16 -g 3 --metric L2 --mixer trans_encoder --dataset flixster --mode coop
 
-     python bot.py --scenario  1 -g 0 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
-     python bot.py --scenario  2 -g 1 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
-     python bot.py --scenario  3 -g 2 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
-     python bot.py --scenario  4 -g 3 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
-     python bot.py --scenario  5 -g 0 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
-     python bot.py --scenario  6 -g 1 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
-     python bot.py --scenario  7 -g 2 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
-     python bot.py --scenario  8 -g 3 --metric L2 --mixer trans_encoder --dataset douban --mode coop
-     python bot.py --scenario  9 -g 0 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
-     python bot.py --scenario 10 -g 1 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\ 
-     python bot.py --scenario 11 -g 2 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
-     python bot.py --scenario 12 -g 3 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
-     python bot.py --scenario 13 -g 0 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
-     python bot.py --scenario 14 -g 1 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
-     python bot.py --scenario 15 -g 2 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
-     python bot.py --scenario 16 -g 3 --metric L2 --mixer trans_encoder --dataset douban --mode coop
-     "
+     # python bot.py --scenario  1 -g 0 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
+     # python bot.py --scenario  2 -g 1 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
+     # python bot.py --scenario  3 -g 2 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
+     # python bot.py --scenario  4 -g 3 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
+     # python bot.py --scenario  5 -g 0 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
+     # python bot.py --scenario  6 -g 1 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
+     # python bot.py --scenario  7 -g 2 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
+     # python bot.py --scenario  8 -g 3 --metric L2 --mixer trans_encoder --dataset douban --mode coop
+     # python bot.py --scenario  9 -g 0 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
+     # python bot.py --scenario 10 -g 1 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\ 
+     # python bot.py --scenario 11 -g 2 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
+     # python bot.py --scenario 12 -g 3 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
+     # python bot.py --scenario 13 -g 0 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
+     # python bot.py --scenario 14 -g 1 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
+     # python bot.py --scenario 15 -g 2 --metric L2 --mixer trans_encoder --dataset douban --mode coop &\
+     # python bot.py --scenario 16 -g 3 --metric L2 --mixer trans_encoder --dataset douban --mode coop
+     # "

@@ -1,123 +1,154 @@
+import scipy.sparse as ssp
 from all_packages import *
-from pytorch_lightning.callbacks import LearningRateMonitor, ModelCheckpoint
-from pytorch_lightning.callbacks.progress import TQDMProgressBar
-from pytorch_lightning.loggers import TensorBoardLogger
-
-from . import ContrasLearnLitData, ContrasLearnLitModel
+from scipy.stats import special_ortho_group
+from torch_geometric.data import Data
 
 
-def get_args():
-    parser = argparse.ArgumentParser(description="Train Regularization using Contrastive Learning")
-    # general settings
+def get_rwpe(A, D, pe_dim=5):
 
-    parser.add_argument("--gpus", "-g", default="0")
-    parser.add_argument("--ckpt", "-c", default=None)
-    parser.add_argument("--superpod", action="store_true")
-    parser.add_argument("--path_dir_dataset", type=str, default="regularization/data")
-    parser.add_argument("--path_dir_mlp_weights", type=str, default="weights")
-    parser.add_argument(
-        "--dataset", type=str, default="yahoo_music", choices=["yahoo_music", "douban", "flixster"]
+    # Geometric diffusion features with Random Walk
+    A = ssp.csr_matrix(A.cpu().numpy())
+    Dinv = ssp.diags(D.cpu().numpy().clip(1) ** -1.0)  # D^-1
+    RW = A * Dinv
+    M = RW
+
+    # Iterate
+    nb_pos_enc = pe_dim
+    PE = [torch.from_numpy(M.diagonal()).float()]
+    M_power = M
+    for _ in range(nb_pos_enc - 1):
+        M_power = M_power * M
+        PE.append(torch.from_numpy(M_power.diagonal()).float())
+
+    PE = torch.stack(PE, dim=-1)
+
+    return PE
+
+
+def get_rwpe_noscipy(A, D, pe_dim=5):
+
+    # Geometric diffusion features with Random Walk
+    Dinv = (D.clamp(1) ** -1.0).diag()
+    RW = A @ Dinv
+    M = RW
+
+    # Iterate
+    nb_pos_enc = pe_dim
+    PE = [M.diagonal()]
+    M_power = M
+    for _ in range(nb_pos_enc - 1):
+        M_power = M_power @ M
+        PE.append(M_power.diagonal())
+
+    PE = torch.stack(PE, dim=-1)
+
+    return PE
+
+
+def sample_perm_matrix(batch: Tensor, device=None, dtype=None):
+    permutation_matrix, permutation_map = [], dict()
+    n = 0
+    for b in batch.unique():
+        n_nodes_each = torch.sum(batch == b).item()
+
+        indices = list(range(n, n + n_nodes_each))
+        shuffled_indices = random.sample(indices, len(indices))
+        perm_map = dict(zip(indices, shuffled_indices))
+        permutation_map = {**permutation_map, **perm_map}
+
+        perm_matrix = torch.zeros((n_nodes_each, n_nodes_each), device=device, dtype=dtype)
+        for i, j in perm_map.items():
+            perm_matrix[i - n][j - n] = 1
+
+        permutation_matrix.append(perm_matrix)
+
+        n += n_nodes_each
+
+    permutation_matrix = torch.block_diag(*permutation_matrix)
+
+    return permutation_matrix, permutation_map
+
+
+def sample_rot_matrix(dim, device, dtype):
+    return torch.from_numpy(special_ortho_group.rvs(dim)).to(device=device, dtype=dtype)
+
+
+def sample_translate_vec(dim, device, dtype):
+    return torch.rand((1, dim), device=device, dtype=dtype)
+
+
+def sample_transform_matrix(dim, batch, device, dtype):
+    perm_matrix = sample_perm_matrix(batch, device, dtype)[0]
+    rot_matrix = sample_rot_matrix(dim, device, dtype)
+    translt_vec = sample_translate_vec(dim, device, dtype)
+
+    return perm_matrix @ rot_matrix + translt_vec
+
+
+def create_trg_regu_matrix(
+    trg_user_indices: Tensor,
+    trg_item_indices: Tensor,
+    n_nodes: int,
+    metric: str = "L2",
+    alpha: float = 0,
+    beta: float = 2,
+    device=None,
+    dtype=None,
+):
+    """Create target matrix for training regularization loss which is achieved by ContrastiveLoss"""
+
+    if metric == "cosine":
+        alpha, beta = 1, 0
+
+    trg_matrix = torch.full((n_nodes, n_nodes), fill_value=alpha, device=device, dtype=dtype)
+    for trg_user_idx, trg_item_idx in zip(trg_user_indices, trg_item_indices):
+        trg_matrix[trg_user_idx] = beta
+        trg_matrix[trg_user_idx, trg_item_idx] = alpha
+
+    trg_matrix = trg_matrix + trg_matrix.triu().T
+
+    return trg_matrix
+
+
+def create_permuted_subgraph(
+    data: Data,
+    pe_dim=5,
+    metric: str = "L2",
+    alpha: float = 0,
+    beta: float = 2,
+    device=None,
+    dtype=None,
+) -> tuple:
+
+    pe_perm, trg = [], []
+
+    perm_matrix, perm_map = sample_perm_matrix(data.batch, device=device, dtype=dtype)
+
+    ## Get target user and item index
+    trg_user_idx, trg_item_idx = (
+        torch.where(data.x[:, 0] == 1)[0],
+        torch.where(data.x[:, 1] == 1)[0],
     )
 
-    parser.add_argument(
-        "--metric",
-        type=str,
-        default="L1",
-        choices=["cosine", "L1", "L2"],
-    )
-    parser.add_argument("--hop", type=int, default=1)
-    parser.add_argument("--sample-ratio", type=float, default=1.0)
-    parser.add_argument("--max-nodes-per-hop", default=10000)
-    parser.add_argument("--seed", type=int, default=1)
-    parser.add_argument("--n_perm_graphs", type=int, default=10)
-    parser.add_argument("--pe_dim", type=int, default=40)
-    parser.add_argument("--lr", type=float, default=5e-3)
-    parser.add_argument("--batch-size", type=int, default=40)
-    parser.add_argument("--tau", type=float, default=0.07)
-    parser.add_argument("--eps", type=float, default=1e-8)
-    parser.add_argument("--dropout", type=float, default=0.25)
-    parser.add_argument("--weight_decay", type=float, default=1e-2)
-    parser.add_argument("--num_train_epochs", type=int, default=60)
-    parser.add_argument("--num_warmup_epochs", type=int, default=10)
-    parser.add_argument("--gradient_clip_val", type=float, default=0.5)
+    ## Get matrix A and D
+    D = pyg_utils.degree(data.edge_index[0])
+    A = pyg_utils.to_dense_adj(data.edge_index).squeeze(0)
 
-    args = parser.parse_args()
+    new_A = perm_matrix @ A @ perm_matrix.T
+    new_D = perm_matrix @ D
+    pe_perm = get_rwpe_noscipy(new_A, new_D, pe_dim)
 
-    ## Set up some configurations
-    args.gpus = [int(x) for x in args.gpus.split(",")]
-
-    return args
-
-
-def get_litmodel(args):
-    litmodel = ContrasLearnLitModel(
-        args.pe_dim,
-        batch_size=args.batch_size,
-        tau=args.tau,
-        eps=args.eps,
-        dropout=args.dropout,
-        metric=args.metric,
-        weight_decay=args.weight_decay,
-        lr=args.lr,
-        num_warmup_epochs=args.num_warmup_epochs,
-        num_train_epochs=args.num_train_epochs,
+    new_user_idx = [perm_map[x.item()] for x in trg_user_idx]
+    new_item_idx = [perm_map[x.item()] for x in trg_item_idx]
+    trg = create_trg_regu_matrix(
+        new_user_idx,
+        new_item_idx,
+        n_nodes=len(D),
+        metric=metric,
+        alpha=alpha,
+        beta=beta,
+        device=device,
+        dtype=dtype,
     )
 
-    return litmodel
-
-
-def get_trainer(args):
-    root_logging = "logs"
-    if args.superpod:
-        now = datetime.now().strftime("%b%d_%H-%M-%S")
-    else:
-        now = (datetime.now() + timedelta(hours=7)).strftime("%b%d_%H-%M-%S")
-
-    additional_info = []
-    if args.superpod:
-        additional_info.append("superpod")
-    if len(args.gpus) > 1:
-        additional_info.append("multi")
-    additional_info = f"{'_'.join(additional_info)}_" if len(additional_info) > 0 else ""
-    name = f"{additional_info}{now}"
-
-    callback_ckpt = ModelCheckpoint(
-        dirpath=osp.join(root_logging, "ckpts", name),
-        filename="{epoch}-{val_loss:.3f}",
-        monitor="val_loss",
-        mode="min",
-        save_top_k=3,
-        save_last=True,
-    )
-    callback_tqdm = TQDMProgressBar(refresh_rate=5)
-    callback_lrmornitor = LearningRateMonitor(logging_interval="step")
-    logger_tboard = TensorBoardLogger(
-        root_logging,
-        name=name,
-        version=now,
-    )
-
-    trainer = plt.Trainer(
-        gpus=args.gpus,
-        max_epochs=args.num_train_epochs,
-        gradient_clip_val=args.gradient_clip_val,
-        strategy="ddp" if len(args.gpus) > 1 else None,
-        # log_every_n_steps=5,
-        callbacks=[callback_ckpt, callback_tqdm, callback_lrmornitor],
-        logger=logger_tboard,
-    )
-
-    return trainer
-
-
-def get_litdata(args):
-    path_train_dataset = (
-        f"regularization/data/train_dataset_{args.dataset}_{args.pe_dim}_{args.metric}.pkl"
-    )
-    path_val_dataset = (
-        f"regularization/data/val_dataset_{args.dataset}_{args.pe_dim}_{args.metric}.pkl"
-    )
-
-    litdata = ContrasLearnLitData(path_train_dataset, path_val_dataset, batch_size=args.batch_size)
-
-    return litdata
+    return pe_perm, trg

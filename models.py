@@ -1,11 +1,9 @@
-from numpy import dtype
 from torch_geometric.nn import RGCNConv
 from torch_geometric.utils import dropout_adj
 
 from all_packages import *
 from hypermixer import HyperMixerLayer
 from layers import *
-from regularization.mlp import MLP
 from regularization.models import ContrastiveModel
 from util_functions import *
 
@@ -192,6 +190,8 @@ class IGMC(GNN):
             data.batch
         )
 
+        device, dtype = x.device, x.dtype
+
         if self.adj_dropout > 0:
             edge_index, edge_type = dropout_adj(
                 edge_index,
@@ -205,9 +205,8 @@ class IGMC(GNN):
         #########################################################
         ## 1. Calculate Contrastive Learning loss
         #########################################################
-        loss_mse_contrs = 0
         if self.mode == "coop":
-            loss_mse_contrs = self.contrastive_model(data=data)
+            loss_mse_contrs = self.contrastive_model(data.permuted_graphs, device, dtype)
 
         #########################################################
         ## 2. Pass thru GNN

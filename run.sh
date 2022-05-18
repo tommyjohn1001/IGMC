@@ -15,7 +15,7 @@ CUDA_VISIBLE_DEVICES=1 python Main.py\
         --pe-dim ${PE_DIM}\
         --ensemble\
         --testing\
-        --batch-size 4\
+        --batch-size 8\
         --lr 0.0008\
         --seed ${SEED}\
         --scenario ${SCENARIO}\

@@ -45,28 +45,16 @@ def get_rwpe_noscipy(A, D, pe_dim=5):
     return PE
 
 
-def sample_perm_matrix(batch: Tensor, device=None, dtype=None):
-    permutation_matrix, permutation_map = [], dict()
-    n = 0
-    for b in batch.unique():
-        n_nodes_each = torch.sum(batch == b).item()
+def sample_perm_matrix(n_nodes, device=None, dtype=None):
+    indices = list(range(n_nodes))
+    shuffled_indices = random.sample(indices, len(indices))
+    perm_map = dict(zip(indices, shuffled_indices))
 
-        indices = list(range(n, n + n_nodes_each))
-        shuffled_indices = random.sample(indices, len(indices))
-        perm_map = dict(zip(indices, shuffled_indices))
-        permutation_map = {**permutation_map, **perm_map}
+    perm_matrix = torch.zeros((n_nodes, n_nodes), device=device, dtype=dtype)
+    for i, j in perm_map.items():
+        perm_matrix[i][j] = 1
 
-        perm_matrix = torch.zeros((n_nodes_each, n_nodes_each), device=device, dtype=dtype)
-        for i, j in perm_map.items():
-            perm_matrix[i - n][j - n] = 1
-
-        permutation_matrix.append(perm_matrix)
-
-        n += n_nodes_each
-
-    permutation_matrix = torch.block_diag(*permutation_matrix)
-
-    return permutation_matrix, permutation_map
+    return perm_matrix, perm_map
 
 
 def sample_rot_matrix(dim, device, dtype):
@@ -77,8 +65,8 @@ def sample_translate_vec(dim, device, dtype):
     return torch.rand((1, dim), device=device, dtype=dtype)
 
 
-def sample_transform_matrix(dim, batch, device, dtype):
-    perm_matrix = sample_perm_matrix(batch, device, dtype)[0]
+def sample_transform_matrix(dim, device, dtype):
+    perm_matrix = sample_perm_matrix(dim, device, dtype)[0]
     rot_matrix = sample_rot_matrix(dim, device, dtype)
     translt_vec = sample_translate_vec(dim, device, dtype)
 
@@ -86,8 +74,8 @@ def sample_transform_matrix(dim, batch, device, dtype):
 
 
 def create_trg_regu_matrix(
-    trg_user_indices: Tensor,
-    trg_item_indices: Tensor,
+    trg_user_idx: Tensor,
+    trg_item_idx: Tensor,
     n_nodes: int,
     metric: str = "L2",
     alpha: float = 0,
@@ -101,9 +89,9 @@ def create_trg_regu_matrix(
         alpha, beta = 1, 0
 
     trg_matrix = torch.full((n_nodes, n_nodes), fill_value=alpha, device=device, dtype=dtype)
-    for trg_user_idx, trg_item_idx in zip(trg_user_indices, trg_item_indices):
-        trg_matrix[trg_user_idx] = beta
-        trg_matrix[trg_user_idx, trg_item_idx] = alpha
+    trg_matrix[trg_user_idx] = trg_matrix[trg_item_idx] = beta
+    trg_matrix[:, trg_user_idx] = trg_matrix[:, trg_item_idx] = beta
+    trg_matrix[trg_user_idx, trg_item_idx] = trg_matrix[trg_item_idx, trg_user_idx] = alpha
 
     trg_matrix = trg_matrix + trg_matrix.triu().T
 
@@ -112,17 +100,15 @@ def create_trg_regu_matrix(
 
 def create_permuted_subgraph(
     data: Data,
+    n_perm_subgraphs=4,
     pe_dim=5,
     metric: str = "L2",
     alpha: float = 0,
     beta: float = 2,
-    device=None,
-    dtype=None,
+    device="cpu",
+    dtype=torch.float,
+    n_samples_equi=4,
 ) -> tuple:
-
-    pe_perm, trg = [], []
-
-    perm_matrix, perm_map = sample_perm_matrix(data.batch, device=device, dtype=dtype)
 
     ## Get target user and item index
     trg_user_idx, trg_item_idx = (
@@ -133,22 +119,36 @@ def create_permuted_subgraph(
     ## Get matrix A and D
     D = pyg_utils.degree(data.edge_index[0])
     A = pyg_utils.to_dense_adj(data.edge_index).squeeze(0)
+    n_nodes = len(D)
 
-    new_A = perm_matrix @ A @ perm_matrix.T
-    new_D = perm_matrix @ D
-    pe_perm = get_rwpe_noscipy(new_A, new_D, pe_dim)
+    permuted_graphs = []
+    for _ in range(n_perm_subgraphs):
+        perm_matrix, perm_map = sample_perm_matrix(n_nodes, device=device, dtype=dtype)
 
-    new_user_idx = [perm_map[x.item()] for x in trg_user_idx]
-    new_item_idx = [perm_map[x.item()] for x in trg_item_idx]
-    trg = create_trg_regu_matrix(
-        new_user_idx,
-        new_item_idx,
-        n_nodes=len(D),
-        metric=metric,
-        alpha=alpha,
-        beta=beta,
-        device=device,
-        dtype=dtype,
-    )
+        new_A = perm_matrix @ A @ perm_matrix.T
+        new_D = perm_matrix @ D
+        pe_perm = get_rwpe_noscipy(new_A, new_D, pe_dim)
 
-    return pe_perm, trg
+        new_user_idx, new_item_idx = perm_map[trg_user_idx.item()], perm_map[trg_item_idx.item()]
+        trg = create_trg_regu_matrix(
+            new_user_idx,
+            new_item_idx,
+            n_nodes=len(D),
+            metric=metric,
+            alpha=alpha,
+            beta=beta,
+            device=device,
+            dtype=dtype,
+        )
+
+        ## Create ra
+        pe_transforms, transforms = [], []
+        for _ in range(n_samples_equi):
+            transform_matrix = sample_transform_matrix(n_nodes, device=device, dtype=dtype)
+
+            pe_transforms.append(transform_matrix @ pe_perm)
+            transforms.append(transform_matrix)
+
+        permuted_graphs.append((pe_perm, trg, pe_transforms, transforms))
+
+    return permuted_graphs

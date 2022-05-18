@@ -23,6 +23,7 @@ from torch_geometric.data import Data, Dataset, InMemoryDataset
 from tqdm import tqdm
 from torch_geometric.utils import degree
 from torch_geometric.utils.convert import to_networkx
+import regularization.utils as reg_utils
 
 warnings.simplefilter('ignore', ssp.SparseEfficiencyWarning)
 cur_dir = os.path.dirname(os.path.realpath(__file__))
@@ -399,7 +400,7 @@ def construct_pyg_graph(u, v, r, node_labels, max_node_label, y, node_features, 
     # data.non_edge_index = non_edges
 
 
-    permuted_graphs = create_permuted_graphs(data, n=5, pos_enc_dim=pos_enc_dim, metric=metric)
+    permuted_graphs = reg_utils.create_permuted_subgraph(data, pe_dim=pos_enc_dim, metric="L2")
     data.permuted_graphs = permuted_graphs
 
     return data

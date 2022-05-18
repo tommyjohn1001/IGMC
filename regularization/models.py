@@ -67,7 +67,7 @@ class ContrastiveDistance(nn.Module):
 
         return sim_mt
 
-    def forward(self, x: Tensor, batch: Tensor):
+    def forward(self, x: Tensor):
         # x: [n_max, d]
 
         n_max = x.shape[0]
@@ -93,19 +93,6 @@ class ContrastiveDistance(nn.Module):
         sim_matrix_masked = sim_matrix + mask_selfcontrs
         # [n_max, n_max]
 
-        ## Mask out positions in sim_matrix which nor present similarity
-        ## of 2 nodes within the same graph
-        mask_notsamegraph = []
-        for b in batch.unique():
-            n_nodes_graph = torch.sum(batch == b)
-            mask = torch.ones((n_nodes_graph, n_nodes_graph), device=device, dtype=dtype)
-            # [n_nodes_graph, n_nodes_graph]
-            mask_notsamegraph.append(mask)
-        mask_notsamegraph = torch.block_diag(*mask_notsamegraph)
-        # [n_max, n_max]
-        mask_notsamegraph = 1 - mask_notsamegraph
-        sim_matrix_masked.masked_fill_(mask_notsamegraph == 1, float("-inf"))
-
         ## Calculate distance matrix
         sim_matrix_logsumexp = torch.logsumexp(sim_matrix_masked, dim=-1, keepdim=True)
         # [n_max, n_max]
@@ -123,8 +110,8 @@ class ContrastiveModel(nn.Module):
         eps=1e-8,
         dropout=0.25,
         metric="L2",
-        n_perm_subgraphs=5,
-        n_samples_equi=5,
+        n_perm_subgraphs=4,
+        n_samples_equi=4,
         alpha=0,
         beta=2,
     ):
@@ -139,48 +126,38 @@ class ContrastiveModel(nn.Module):
         self.mlp = MLP(d=pe_dim, dropout=dropout)
         self.criterion_mse = nn.MSELoss()
 
-    def forward(self, data: Data):
-        # data.x: [n_max, d]
-
-        batch = data.batch
-        device, dtype = data.x.device, data.x.dtype
-        n_nodes = data.x.shape[0]
-
+    def forward(self, permuted_graphs, device, dtype):
         loss_target_dis = 0
         loss_equi = 0
-        for _ in range(self.n_perm_subgraphs):
-            pe_perm, L_trg__origin = reg_utils.create_permuted_subgraph(
-                data,
-                pe_dim=self.pe_dim,
-                metric=self.metric,
-                alpha=self.alpha,
-                beta=self.beta,
-                device=device,
-                dtype=dtype,
-            )
 
-            pe_origin = self.mlp(pe_perm)
+        for entry in permuted_graphs:
+            entry = entry[0]
 
-            L_hat_origin = self.ConDistance(pe_origin, batch)
-            # [n_max, n_max]
+            for subgraph in entry:
+                pe_origin, L_trg_origin, pe_transforms, transforms = subgraph
+                pe_origin = pe_origin.to(device=device, dtype=dtype)
+                L_trg_origin = L_trg_origin.to(device=device, dtype=dtype)
 
-            loss_target_dis = self.criterion_mse(L_hat_origin, L_trg__origin)
+                pe_origin = self.mlp(pe_origin)
 
-            ## For Equivariance
-            loss_equi_ = 0
-            for _ in range(self.n_samples_equi):
-
-                transform_matrix = reg_utils.sample_transform_matrix(
-                    n_nodes, batch=data.batch, device=device, dtype=dtype
-                )
-                pe_transform = transform_matrix @ pe_origin
-                L_hat_transform = self.ConDistance(pe_transform, batch)
+                L_hat_origin = self.ConDistance(pe_origin)
                 # [n_max, n_max]
 
-                loss_equi_ += self.criterion_mse(L_hat_transform, L_hat_origin)
+                loss_target_dis = self.criterion_mse(L_hat_origin, L_trg_origin)
 
-            loss_equi += 1 / self.n_samples_equi * loss_equi_
+                ## For Equivariance
+                loss_equi_ = 0
+                for pe_transf, transf in zip(pe_transforms, transforms):
+                    pe_transf = pe_transf.to(device=device, dtype=dtype)
+                    transf = transf.to(device=device, dtype=dtype)
 
-        loss_contrastive = 1 / self.n_perm_subgraphs * (loss_target_dis + loss_equi)
+                    L_hat_transform = self.ConDistance(pe_transf)
+                    # [n_max, n_max]
+
+                    loss_equi_ += self.criterion_mse(L_hat_transform, transf @ L_hat_origin)
+
+                loss_equi += 1 / self.n_samples_equi * loss_equi_
+
+            loss_contrastive = 1 / self.n_perm_subgraphs * (loss_target_dis + loss_equi)
 
         return loss_contrastive

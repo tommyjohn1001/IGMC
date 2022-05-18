@@ -81,7 +81,7 @@ if __name__ == "__main__":
 
     cuda_device = args.gpu
     if args.mode == "pretraining":
-        datasets = ["yahoo_music"]
+        datasets = ["flixster"]
         times = 1
     else:
         datasets = [args.dataset]

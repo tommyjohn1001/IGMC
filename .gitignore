@@ -16,3 +16,4 @@ slurms/
 tests/
 *.pkl
 wandb
+*.whl
